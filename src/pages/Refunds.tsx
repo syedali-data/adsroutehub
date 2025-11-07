@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
 
 const Refunds = () => {
@@ -39,6 +40,11 @@ const Refunds = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>("");
   const [reason, setReason] = useState("");
+  const [reasonCategory, setReasonCategory] = useState<string>("");
+  const [requestedBy, setRequestedBy] = useState<string>("buyer");
+  const [requestedByDetails, setRequestedByDetails] = useState("");
+  const [refundScope, setRefundScope] = useState<string>("full");
+  const [refundAmount, setRefundAmount] = useState<string>("");
 
   const { data: refundRequests, isLoading } = useQuery({
     queryKey: ["refund-requests"],
@@ -103,6 +109,11 @@ const Refunds = () => {
         new_status: status,
         previous_status: request.status,
         reason: request.reason,
+        reason_category: request.reason_category,
+        requested_by: request.requested_by,
+        requested_by_details: request.requested_by_details,
+        refund_scope: request.refund_scope,
+        refund_amount: request.refund_amount,
         charge_amount: delivery?.charge_amount ?? null,
         created_ts: request.created_at,
       }),
@@ -142,7 +153,23 @@ const Refunds = () => {
   });
 
   const createRefundMutation = useMutation({
-    mutationFn: async ({ deliveryId, reason }: { deliveryId: string; reason: string }) => {
+    mutationFn: async ({ 
+      deliveryId, 
+      reason,
+      reasonCategory,
+      requestedBy,
+      requestedByDetails,
+      refundScope,
+      refundAmount,
+    }: { 
+      deliveryId: string; 
+      reason: string;
+      reasonCategory: string;
+      requestedBy: string;
+      requestedByDetails: string;
+      refundScope: string;
+      refundAmount: number;
+    }) => {
       // Find the delivery to get buyer_id and lead_id
       const delivery = deliveries?.find((d) => d.id === deliveryId);
       if (!delivery) throw new Error("Delivery not found");
@@ -151,6 +178,11 @@ const Refunds = () => {
         delivery_id: deliveryId,
         buyer_id: delivery.buyer_id,
         reason: reason,
+        reason_category: reasonCategory,
+        requested_by: requestedBy,
+        requested_by_details: requestedByDetails || null,
+        refund_scope: refundScope,
+        refund_amount: refundAmount,
         status: "pending",
         auto_decision: false,
       });
@@ -163,6 +195,11 @@ const Refunds = () => {
       setIsCreateModalOpen(false);
       setSelectedDeliveryId("");
       setReason("");
+      setReasonCategory("");
+      setRequestedBy("buyer");
+      setRequestedByDetails("");
+      setRefundScope("full");
+      setRefundAmount("");
     },
     onError: (error: any) => {
       toast({
@@ -190,7 +227,46 @@ const Refunds = () => {
       });
       return;
     }
-    createRefundMutation.mutate({ deliveryId: selectedDeliveryId, reason });
+    if (!reasonCategory) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a reason category",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!requestedBy) {
+      toast({
+        title: "Validation Error",
+        description: "Please select who requested the refund",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const delivery = deliveries?.find((d) => d.id === selectedDeliveryId);
+    const finalRefundAmount = refundScope === "full" 
+      ? (delivery?.charge_amount || 0) 
+      : parseFloat(refundAmount);
+
+    if (refundScope === "partial" && (!refundAmount || finalRefundAmount <= 0)) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid refund amount for partial refunds",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createRefundMutation.mutate({ 
+      deliveryId: selectedDeliveryId, 
+      reason,
+      reasonCategory,
+      requestedBy,
+      requestedByDetails,
+      refundScope,
+      refundAmount: finalRefundAmount,
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -289,7 +365,16 @@ const Refunds = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="delivery">Delivery *</Label>
-              <Select value={selectedDeliveryId} onValueChange={setSelectedDeliveryId}>
+              <Select 
+                value={selectedDeliveryId} 
+                onValueChange={(value) => {
+                  setSelectedDeliveryId(value);
+                  const delivery = deliveries?.find((d) => d.id === value);
+                  if (delivery && refundScope === "full") {
+                    setRefundAmount(delivery.charge_amount?.toString() || "0");
+                  }
+                }}
+              >
                 <SelectTrigger id="delivery">
                   <SelectValue placeholder="Select a delivery" />
                 </SelectTrigger>
@@ -302,6 +387,24 @@ const Refunds = () => {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="reason-category">Reason category *</Label>
+              <Select value={reasonCategory} onValueChange={setReasonCategory}>
+                <SelectTrigger id="reason-category">
+                  <SelectValue placeholder="Select a reason category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bad_contact">Bad contact</SelectItem>
+                  <SelectItem value="duplicate_lead">Duplicate lead</SelectItem>
+                  <SelectItem value="outside_service_area">Outside service area</SelectItem>
+                  <SelectItem value="job_cancelled">Job cancelled</SelectItem>
+                  <SelectItem value="lead_not_interested">Lead not interested</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="reason">Reason *</Label>
               <Textarea
@@ -310,6 +413,69 @@ const Refunds = () => {
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Enter the reason for the refund request"
                 rows={4}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="requested-by">Requested by *</Label>
+              <Select value={requestedBy} onValueChange={setRequestedBy}>
+                <SelectTrigger id="requested-by">
+                  <SelectValue placeholder="Select who requested the refund" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="buyer">Buyer</SelectItem>
+                  <SelectItem value="internal">Internal</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="requested-by-details">Requested by details</Label>
+              <Input
+                id="requested-by-details"
+                type="text"
+                value={requestedByDetails}
+                onChange={(e) => setRequestedByDetails(e.target.value)}
+                placeholder="Name or email (optional)"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="refund-scope">Refund type *</Label>
+              <Select 
+                value={refundScope} 
+                onValueChange={(value) => {
+                  setRefundScope(value);
+                  if (value === "full") {
+                    const delivery = deliveries?.find((d) => d.id === selectedDeliveryId);
+                    if (delivery) {
+                      setRefundAmount(delivery.charge_amount?.toString() || "0");
+                    }
+                  }
+                }}
+              >
+                <SelectTrigger id="refund-scope">
+                  <SelectValue placeholder="Select refund type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">Full delivery amount</SelectItem>
+                  <SelectItem value="partial">Partial amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="refund-amount">Refund amount *</Label>
+              <Input
+                id="refund-amount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                disabled={refundScope === "full"}
+                placeholder="Enter refund amount"
               />
             </div>
           </div>

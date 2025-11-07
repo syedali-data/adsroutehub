@@ -276,6 +276,11 @@ export type Database = {
           handled_ts: string | null
           id: string
           reason: string
+          reason_category: string | null
+          refund_amount: number | null
+          refund_scope: string | null
+          requested_by: string | null
+          requested_by_details: string | null
           status: Database["public"]["Enums"]["refund_status"]
         }
         Insert: {
@@ -287,6 +292,11 @@ export type Database = {
           handled_ts?: string | null
           id?: string
           reason: string
+          reason_category?: string | null
+          refund_amount?: number | null
+          refund_scope?: string | null
+          requested_by?: string | null
+          requested_by_details?: string | null
           status?: Database["public"]["Enums"]["refund_status"]
         }
         Update: {
@@ -298,6 +308,11 @@ export type Database = {
           handled_ts?: string | null
           id?: string
           reason?: string
+          reason_category?: string | null
+          refund_amount?: number | null
+          refund_scope?: string | null
+          requested_by?: string | null
+          requested_by_details?: string | null
           status?: Database["public"]["Enums"]["refund_status"]
         }
         Relationships: [
