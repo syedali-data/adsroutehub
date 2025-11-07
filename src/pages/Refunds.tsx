@@ -12,12 +12,33 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X } from "lucide-react";
+import { Check, X, Plus } from "lucide-react";
 import { getSettingsMap } from "@/lib/settings";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useState } from "react";
 
 const Refunds = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>("");
+  const [reason, setReason] = useState("");
 
   const { data: refundRequests, isLoading } = useQuery({
     queryKey: ["refund-requests"],
@@ -26,6 +47,20 @@ const Refunds = () => {
         .from("refund_requests")
         .select("*, deliveries(id, charge_amount, leads(id, name, email), buyers(id, business_name))")
         .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: deliveries } = useQuery({
+    queryKey: ["deliveries-for-refund"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("deliveries")
+        .select("id, charge_amount, lead_id, buyer_id, leads(name, email), buyers(business_name)")
+        .order("created_at", { ascending: false })
+        .limit(50);
 
       if (error) throw error;
       return data;
@@ -106,6 +141,58 @@ const Refunds = () => {
     },
   });
 
+  const createRefundMutation = useMutation({
+    mutationFn: async ({ deliveryId, reason }: { deliveryId: string; reason: string }) => {
+      // Find the delivery to get buyer_id and lead_id
+      const delivery = deliveries?.find((d) => d.id === deliveryId);
+      if (!delivery) throw new Error("Delivery not found");
+
+      const { error } = await supabase.from("refund_requests").insert({
+        delivery_id: deliveryId,
+        buyer_id: delivery.buyer_id,
+        reason: reason,
+        status: "pending",
+        auto_decision: false,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      toast({ title: "Success", description: "Refund request created" });
+      setIsCreateModalOpen(false);
+      setSelectedDeliveryId("");
+      setReason("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create refund request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCreateRefund = () => {
+    if (!selectedDeliveryId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a delivery",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!reason.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please provide a reason",
+        variant: "destructive",
+      });
+      return;
+    }
+    createRefundMutation.mutate({ deliveryId: selectedDeliveryId, reason });
+  };
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: "bg-warning",
@@ -118,9 +205,15 @@ const Refunds = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Refunds</h1>
-        <p className="text-muted-foreground">Manage refund requests</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Refunds</h1>
+          <p className="text-muted-foreground">Manage refund requests</p>
+        </div>
+        <Button onClick={() => setIsCreateModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          New refund request
+        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -184,6 +277,55 @@ const Refunds = () => {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create refund request</DialogTitle>
+            <DialogDescription>
+              Manually create a new refund request for a delivery.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="delivery">Delivery *</Label>
+              <Select value={selectedDeliveryId} onValueChange={setSelectedDeliveryId}>
+                <SelectTrigger id="delivery">
+                  <SelectValue placeholder="Select a delivery" />
+                </SelectTrigger>
+                <SelectContent>
+                  {deliveries?.map((delivery) => (
+                    <SelectItem key={delivery.id} value={delivery.id}>
+                      {delivery.id.slice(0, 8)} • {delivery.leads?.name || "Unknown"} • {delivery.buyers?.business_name || "Unknown"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason *</Label>
+              <Textarea
+                id="reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Enter the reason for the refund request"
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRefund}
+              disabled={createRefundMutation.isPending}
+            >
+              {createRefundMutation.isPending ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
