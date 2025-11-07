@@ -55,7 +55,7 @@ export function AppSidebar() {
             <img src={adsLogo} alt="ADS Logo" className="h-12 w-12" />
             <div>
               <h2 className="text-xl font-bold text-primary">ADS</h2>
-              <p className="text-xs text-muted-foreground">RouterHub</p>
+              <p className="text-xs text-muted-foreground">RouteHub</p>
             </div>
           </div>
           <SidebarGroupLabel className="text-base font-semibold px-4 py-3 mt-2">
