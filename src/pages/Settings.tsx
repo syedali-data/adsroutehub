@@ -170,6 +170,29 @@ const Settings = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Refund Configuration</CardTitle>
+          <CardDescription>Configure refund request policies</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="refund-window-days">Refund Window (Days)</Label>
+            <Input
+              id="refund-window-days"
+              type="number"
+              min="1"
+              max="365"
+              value={settings["REFUND_WINDOW_DAYS"] || "14"}
+              onChange={(e) => updateSetting("REFUND_WINDOW_DAYS", e.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">
+              Refund requests must be submitted within this many days of delivery creation
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Stripe Billing</CardTitle>
           <CardDescription>Configure payment processing</CardDescription>
         </CardHeader>

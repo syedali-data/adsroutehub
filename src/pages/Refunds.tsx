@@ -46,6 +46,16 @@ const Refunds = () => {
   const [refundScope, setRefundScope] = useState<string>("full");
   const [refundAmount, setRefundAmount] = useState<string>("");
 
+  // Fetch settings for refund window
+  const { data: settings } = useQuery({
+    queryKey: ["settings-refund"],
+    queryFn: async () => {
+      return await getSettingsMap(supabase);
+    },
+  });
+
+  const refundWindowDays = parseInt(settings?.["REFUND_WINDOW_DAYS"] || "14", 10);
+
   const { data: refundRequests, isLoading } = useQuery({
     queryKey: ["refund-requests"],
     queryFn: async () => {
@@ -59,17 +69,79 @@ const Refunds = () => {
     },
   });
 
-  const { data: deliveries } = useQuery({
-    queryKey: ["deliveries-for-refund"],
+  // Fetch buyer stats for display
+  const { data: buyerStats } = useQuery({
+    queryKey: ["buyer-refund-stats"],
     queryFn: async () => {
+      // Get all unique buyer IDs from refund requests
+      const buyerIds = [...new Set(refundRequests?.map(r => r.buyer_id).filter(Boolean))];
+      
+      if (buyerIds.length === 0) return {};
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      // Query deliveries and refunds for stats
+      const statsMap: Record<string, { 
+        total30d: number; 
+        refunded30d: number; 
+        totalAll: number; 
+        refundedAll: number; 
+      }> = {};
+
+      for (const buyerId of buyerIds) {
+        // 30-day stats
+        const { data: deliveries30d } = await supabase
+          .from("deliveries")
+          .select("id, refunded")
+          .eq("buyer_id", buyerId)
+          .gte("created_at", thirtyDaysAgo.toISOString());
+
+        // Lifetime stats
+        const { data: deliveriesAll } = await supabase
+          .from("deliveries")
+          .select("id, refunded")
+          .eq("buyer_id", buyerId);
+
+        statsMap[buyerId] = {
+          total30d: deliveries30d?.length || 0,
+          refunded30d: deliveries30d?.filter(d => d.refunded).length || 0,
+          totalAll: deliveriesAll?.length || 0,
+          refundedAll: deliveriesAll?.filter(d => d.refunded).length || 0,
+        };
+      }
+
+      return statsMap;
+    },
+    enabled: !!refundRequests && refundRequests.length > 0,
+  });
+
+  const { data: deliveries } = useQuery({
+    queryKey: ["deliveries-for-refund", refundWindowDays],
+    queryFn: async () => {
+      // Calculate the cutoff date based on refund window
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - refundWindowDays);
+
       const { data, error } = await supabase
         .from("deliveries")
-        .select("id, charge_amount, lead_id, buyer_id, leads(name, email), buyers(business_name)")
+        .select("id, charge_amount, lead_id, buyer_id, created_at, refunded, leads(name, email), buyers(business_name)")
+        .eq("refunded", false) // Anti-abuse rule #2: exclude already refunded
+        .gte("created_at", cutoffDate.toISOString()) // Anti-abuse rule #3: within refund window
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (error) throw error;
-      return data;
+
+      // Anti-abuse rule #1: Filter out deliveries with active refund requests
+      const { data: activeRefunds } = await supabase
+        .from("refund_requests")
+        .select("delivery_id")
+        .in("status", ["pending", "approved"]);
+
+      const activeDeliveryIds = new Set(activeRefunds?.map(r => r.delivery_id) || []);
+      
+      return data?.filter(d => !activeDeliveryIds.has(d.id));
     },
   });
 
@@ -173,6 +245,29 @@ const Refunds = () => {
       // Find the delivery to get buyer_id and lead_id
       const delivery = deliveries?.find((d) => d.id === deliveryId);
       if (!delivery) throw new Error("Delivery not found");
+
+      // Anti-abuse rule #2: Check if already refunded
+      if (delivery.refunded) {
+        throw new Error("This delivery has already been refunded.");
+      }
+
+      // Anti-abuse rule #3: Check refund window
+      const deliveryAge = (Date.now() - new Date(delivery.created_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (deliveryAge > refundWindowDays) {
+        throw new Error(`Refund window has expired for this delivery (more than ${refundWindowDays} days old).`);
+      }
+
+      // Anti-abuse rule #1: Check for existing active refund request
+      const { data: existingRefund } = await supabase
+        .from("refund_requests")
+        .select("id")
+        .eq("delivery_id", deliveryId)
+        .in("status", ["pending", "approved"])
+        .maybeSingle();
+
+      if (existingRefund) {
+        throw new Error("A refund request already exists for this delivery (pending or approved).");
+      }
 
       const { error } = await supabase.from("refund_requests").insert({
         delivery_id: deliveryId,
@@ -318,37 +413,54 @@ const Refunds = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              refundRequests?.map((request) => (
-                <TableRow key={request.id}>
-                  <TableCell>{format(new Date(request.created_at), "MMM dd, yyyy")}</TableCell>
-                  <TableCell>{request.deliveries?.leads?.name || "N/A"}</TableCell>
-                  <TableCell>{request.deliveries?.buyers?.business_name || "N/A"}</TableCell>
-                  <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {request.status === "pending" && (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRefundMutation.mutate({ id: request.id, status: "approved" })}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRefundMutation.mutate({ id: request.id, status: "rejected" })}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+              refundRequests?.map((request) => {
+                const stats = buyerStats?.[request.buyer_id || ""];
+                const stats30dText = stats 
+                  ? `${stats.refunded30d}/${stats.total30d} (${stats.total30d > 0 ? Math.round((stats.refunded30d / stats.total30d) * 100) : 0}%)`
+                  : "—";
+                const statsAllText = stats 
+                  ? `${stats.refundedAll}/${stats.totalAll} (${stats.totalAll > 0 ? Math.round((stats.refundedAll / stats.totalAll) * 100) : 0}%)`
+                  : "—";
+
+                return (
+                  <TableRow key={request.id}>
+                    <TableCell>{format(new Date(request.created_at), "MMM dd, yyyy")}</TableCell>
+                    <TableCell>{request.deliveries?.leads?.name || "N/A"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{request.deliveries?.buyers?.business_name || "N/A"}</span>
+                        <span className="text-xs text-muted-foreground">
+                          30d: {stats30dText} • Lifetime: {statsAllText}
+                        </span>
                       </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{request.reason}</TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(request.status)}>{request.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {request.status === "pending" && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRefundMutation.mutate({ id: request.id, status: "approved" })}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRefundMutation.mutate({ id: request.id, status: "rejected" })}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
