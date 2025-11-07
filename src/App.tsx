@@ -14,6 +14,8 @@ import Campaigns from "./pages/Campaigns";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import BuyerLogin from "./pages/buyer/Login";
+import BuyerDashboard from "./pages/buyer/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -95,6 +97,11 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          
+          {/* Buyer Portal Routes */}
+          <Route path="/buyer/login" element={<BuyerLogin />} />
+          <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

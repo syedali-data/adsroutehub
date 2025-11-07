@@ -35,6 +35,32 @@ export type Database = {
         }
         Relationships: []
       }
+      buyer_users: {
+        Row: {
+          buyer_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          buyer_id: string
+          created_at?: string
+          id: string
+        }
+        Update: {
+          buyer_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buyer_users_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: true
+            referencedRelation: "buyers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyers: {
         Row: {
           business_name: string
