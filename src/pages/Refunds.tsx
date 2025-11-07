@@ -398,8 +398,6 @@ const Refunds = () => {
                   <SelectItem value="bad_contact">Bad contact</SelectItem>
                   <SelectItem value="duplicate_lead">Duplicate lead</SelectItem>
                   <SelectItem value="outside_service_area">Outside service area</SelectItem>
-                  <SelectItem value="job_cancelled">Job cancelled</SelectItem>
-                  <SelectItem value="lead_not_interested">Lead not interested</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
