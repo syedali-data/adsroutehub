@@ -1,5 +1,6 @@
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
+import adsLogo from "@/assets/ads-logo.png";
 import {
   LayoutDashboard,
   Users,
@@ -50,8 +51,15 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-base font-bold px-4 py-3">
-            ADS RouterHub
+          <div className="flex items-center gap-3 px-4 py-6 border-b">
+            <img src={adsLogo} alt="ADS Logo" className="h-12 w-12" />
+            <div>
+              <h2 className="text-xl font-bold text-primary">ADS</h2>
+              <p className="text-xs text-muted-foreground">RouterHub</p>
+            </div>
+          </div>
+          <SidebarGroupLabel className="text-base font-semibold px-4 py-3 mt-2">
+            Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
