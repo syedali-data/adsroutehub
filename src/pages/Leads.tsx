@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { AddLeadDialog } from "@/components/leads/AddLeadDialog";
 
 const Leads = () => {
   const navigate = useNavigate();
@@ -49,10 +48,7 @@ const Leads = () => {
           <h1 className="text-3xl font-bold">Leads</h1>
           <p className="text-muted-foreground">Manage your incoming leads</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Lead
-        </Button>
+        <AddLeadDialog />
       </div>
 
       <div className="rounded-md border">

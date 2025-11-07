@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { AddCampaignDialog } from "@/components/campaigns/AddCampaignDialog";
 
 const Campaigns = () => {
   const { data: campaigns, isLoading } = useQuery({
@@ -37,10 +36,7 @@ const Campaigns = () => {
           <h1 className="text-3xl font-bold">Campaigns</h1>
           <p className="text-muted-foreground">Manage your lead campaigns</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Campaign
-        </Button>
+        <AddCampaignDialog />
       </div>
 
       <div className="rounded-md border">

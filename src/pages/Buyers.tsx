@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { AddBuyerDialog } from "@/components/buyers/AddBuyerDialog";
 
 const Buyers = () => {
   const navigate = useNavigate();
@@ -45,10 +44,7 @@ const Buyers = () => {
           <h1 className="text-3xl font-bold">Buyers</h1>
           <p className="text-muted-foreground">Manage your lead buyers</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Buyer
-        </Button>
+        <AddBuyerDialog />
       </div>
 
       <div className="rounded-md border">
