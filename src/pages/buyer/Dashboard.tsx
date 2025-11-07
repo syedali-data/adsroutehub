@@ -1,113 +1,114 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCurrentBuyer } from "@/lib/buyerAuth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { LogOut, TrendingUp, DollarSign, Package, Calendar } from "lucide-react";
-import { Database } from "@/integrations/supabase/types";
-import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
-type Buyer = Database["public"]["Tables"]["buyers"]["Row"];
-type Delivery = Database["public"]["Tables"]["deliveries"]["Row"];
+const SERVICE_OPTIONS = [
+  "hvac contractor",
+  "closet design",
+  "plumbing",
+  "electrical",
+  "roofing",
+  "painting",
+];
 
-const BuyerDashboard = () => {
-  const [buyer, setBuyer] = useState<Buyer | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function BuyerDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadBuyer();
-  }, []);
+  const { data: buyer, isLoading } = useQuery({
+    queryKey: ["current-buyer"],
+    queryFn: getCurrentBuyer,
+  });
 
-  const loadBuyer = async () => {
-    const currentBuyer = await getCurrentBuyer();
-    
-    if (!currentBuyer) {
-      toast({
-        variant: "destructive",
-        title: "Access denied",
-        description: "No buyer account is associated with this email. Please contact support.",
-      });
-      await supabase.auth.signOut();
-      navigate("/buyer/login");
-      return;
-    }
-
-    setBuyer(currentBuyer);
-    setLoading(false);
-  };
-
-  const { data: deliveries = [] } = useQuery({
-    queryKey: ["buyer-deliveries", buyer?.id],
-    enabled: !!buyer,
+  const { data: stats } = useQuery({
+    queryKey: ["buyer-stats", buyer?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!buyer) return null;
+
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const { data: deliveries7d } = await supabase
         .from("deliveries")
-        .select("*")
-        .eq("buyer_id", buyer!.id)
+        .select("charge_amount, refunded")
+        .eq("buyer_id", buyer.id)
+        .gte("created_at", sevenDaysAgo.toISOString());
+
+      const { data: deliveries30d } = await supabase
+        .from("deliveries")
+        .select("charge_amount, refunded")
+        .eq("buyer_id", buyer.id)
+        .gte("created_at", thirtyDaysAgo.toISOString());
+
+      return {
+        count7d: deliveries7d?.length || 0,
+        count30d: deliveries30d?.length || 0,
+        spend7d: deliveries7d?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount), 0) || 0,
+        spend30d: deliveries30d?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount), 0) || 0,
+      };
+    },
+    enabled: !!buyer,
+  });
+
+  const { data: recentDeliveries } = useQuery({
+    queryKey: ["buyer-recent-deliveries", buyer?.id],
+    queryFn: async () => {
+      if (!buyer) return [];
+
+      const { data } = await supabase
+        .from("deliveries")
+        .select(`
+          id,
+          created_at,
+          charge_amount,
+          refunded,
+          lead_id,
+          leads (name)
+        `)
+        .eq("buyer_id", buyer.id)
         .order("created_at", { ascending: false })
         .limit(20);
 
-      if (error) throw error;
-      return data as Delivery[];
+      return data || [];
     },
+    enabled: !!buyer,
   });
 
-  const stats = {
-    last7Days: deliveries.filter((d) => {
-      const daysDiff = (Date.now() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24);
-      return daysDiff <= 7;
-    }).length,
-    last30Days: deliveries.filter((d) => {
-      const daysDiff = (Date.now() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24);
-      return daysDiff <= 30;
-    }).length,
-    spend7Days: deliveries
-      .filter((d) => {
-        const daysDiff = (Date.now() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24);
-        return daysDiff <= 7 && !d.refunded;
-      })
-      .reduce((sum, d) => sum + Number(d.charge_amount), 0),
-    spend30Days: deliveries
-      .filter((d) => {
-        const daysDiff = (Date.now() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24);
-        return daysDiff <= 30 && !d.refunded;
-      })
-      .reduce((sum, d) => sum + Number(d.charge_amount), 0),
-  };
-
   const updateBuyerMutation = useMutation({
-    mutationFn: async (updates: Partial<Buyer>) => {
+    mutationFn: async (updates: any) => {
+      if (!buyer) throw new Error("No buyer found");
+      
       const { error } = await supabase
         .from("buyers")
         .update(updates)
-        .eq("id", buyer!.id);
+        .eq("id", buyer.id);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["buyer-deliveries"] });
+      queryClient.invalidateQueries({ queryKey: ["current-buyer"] });
       toast({
         title: "Settings updated",
-        description: "Your preferences have been saved",
+        description: "Your preferences have been saved.",
       });
-      loadBuyer();
     },
     onError: (error: any) => {
       toast({
-        variant: "destructive",
-        title: "Update failed",
+        title: "Error",
         description: error.message,
+        variant: "destructive",
       });
     },
   });
@@ -117,93 +118,79 @@ const BuyerDashboard = () => {
     navigate("/buyer/login");
   };
 
-  const handleStatusToggle = (checked: boolean) => {
-    updateBuyerMutation.mutate({ status: checked ? "active" : "paused" });
-  };
+  useEffect(() => {
+    if (!isLoading && !buyer) {
+      toast({
+        title: "Access denied",
+        description: "No buyer account is associated with this email. Please contact support.",
+        variant: "destructive",
+      });
+      navigate("/buyer/login");
+    }
+  }, [buyer, isLoading, navigate, toast]);
 
-  const handleCapUpdate = (field: "daily_cap" | "shared_cap", value: string) => {
-    const num = parseInt(value) || 0;
-    const max = field === "daily_cap" ? 50 : 10;
-    const clamped = Math.max(0, Math.min(max, num));
-    updateBuyerMutation.mutate({ [field]: clamped });
-  };
-
-  const handleServicesUpdate = (services: string[]) => {
-    updateBuyerMutation.mutate({ services_csv: services.join(",") });
-  };
-
-  if (loading || !buyer) {
+  if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">Loading...</div>
       </div>
     );
   }
 
-  const serviceOptions = ["hvac contractor", "closet design", "plumbing"];
-  const selectedServices = buyer.services_csv ? buyer.services_csv.split(",").map(s => s.trim()) : [];
+  if (!buyer) return null;
+
+  const selectedServices = buyer.services_csv?.split(",").map(s => s.trim()).filter(Boolean) || [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center justify-between p-4">
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{buyer.business_name}</h1>
-            <p className="text-sm text-muted-foreground">
-              {buyer.city} • {buyer.email}
-            </p>
+            <h1 className="text-3xl font-bold">{buyer.business_name}</h1>
+            <p className="text-muted-foreground">{buyer.city} • {buyer.email}</p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
+            Sign out
           </Button>
         </div>
-      </header>
 
-      <main className="container mx-auto p-4 space-y-6">
-        {/* Stats Cards */}
+        {/* Stats */}
         <div className="grid gap-4 md:grid-cols-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Last 7 Days</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="pb-2">
+              <CardDescription>Last 7 days</CardDescription>
+              <CardTitle className="text-3xl">{stats?.count7d || 0}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.last7Days}</div>
-              <p className="text-xs text-muted-foreground">leads delivered</p>
+              <p className="text-sm text-muted-foreground">Leads delivered</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Last 30 Days</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="pb-2">
+              <CardDescription>Last 30 days</CardDescription>
+              <CardTitle className="text-3xl">{stats?.count30d || 0}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.last30Days}</div>
-              <p className="text-xs text-muted-foreground">leads delivered</p>
+              <p className="text-sm text-muted-foreground">Leads delivered</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Spend (7d)</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="pb-2">
+              <CardDescription>Last 7 days</CardDescription>
+              <CardTitle className="text-3xl">${stats?.spend7d.toFixed(2) || "0.00"}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats.spend7Days.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">total charges</p>
+              <p className="text-sm text-muted-foreground">Total spend</p>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Spend (30d)</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="pb-2">
+              <CardDescription>Last 30 days</CardDescription>
+              <CardTitle className="text-3xl">${stats?.spend30d.toFixed(2) || "0.00"}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats.spend30Days.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">total charges</p>
+              <p className="text-sm text-muted-foreground">Total spend</p>
             </CardContent>
           </Card>
         </div>
@@ -212,42 +199,46 @@ const BuyerDashboard = () => {
         <Card>
           <CardHeader>
             <CardTitle>Status & Capacity</CardTitle>
-            <CardDescription>Manage your lead receiving preferences</CardDescription>
+            <CardDescription>Control when you receive leads</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label htmlFor="status">Active Status</Label>
+              <Label htmlFor="status-switch">Active status</Label>
               <Switch
-                id="status"
+                id="status-switch"
                 checked={buyer.status === "active"}
-                onCheckedChange={handleStatusToggle}
+                onCheckedChange={(checked) => {
+                  updateBuyerMutation.mutate({ status: checked ? "active" : "paused" });
+                }}
               />
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="daily_cap">Daily Cap (max: 50)</Label>
+                <Label htmlFor="daily-cap">Daily cap (max: 50)</Label>
                 <Input
-                  id="daily_cap"
+                  id="daily-cap"
                   type="number"
                   min="0"
                   max="50"
                   value={buyer.daily_cap}
-                  onChange={(e) => handleCapUpdate("daily_cap", e.target.value)}
-                  onBlur={(e) => handleCapUpdate("daily_cap", e.target.value)}
+                  onChange={(e) => {
+                    const value = Math.min(50, Math.max(0, parseInt(e.target.value) || 0));
+                    updateBuyerMutation.mutate({ daily_cap: value });
+                  }}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="shared_cap">Shared Cap (max: 10)</Label>
+                <Label htmlFor="shared-cap">Shared cap (max: 10)</Label>
                 <Input
-                  id="shared_cap"
+                  id="shared-cap"
                   type="number"
                   min="0"
                   max="10"
                   value={buyer.shared_cap}
-                  onChange={(e) => handleCapUpdate("shared_cap", e.target.value)}
-                  onBlur={(e) => handleCapUpdate("shared_cap", e.target.value)}
+                  onChange={(e) => {
+                    const value = Math.min(10, Math.max(0, parseInt(e.target.value) || 0));
+                    updateBuyerMutation.mutate({ shared_cap: value });
+                  }}
                 />
               </div>
             </div>
@@ -261,44 +252,49 @@ const BuyerDashboard = () => {
             <CardDescription>Select the services you want to receive leads for</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {serviceOptions.map((service) => (
-                <Badge
-                  key={service}
-                  variant={selectedServices.includes(service) ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    const newServices = selectedServices.includes(service)
-                      ? selectedServices.filter((s) => s !== service)
-                      : [...selectedServices, service];
-                    handleServicesUpdate(newServices);
-                  }}
-                >
-                  {service}
-                </Badge>
+            <div className="space-y-3">
+              {SERVICE_OPTIONS.map((service) => (
+                <div key={service} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={service}
+                    checked={selectedServices.includes(service)}
+                    onCheckedChange={(checked) => {
+                      let newServices = [...selectedServices];
+                      if (checked) {
+                        newServices.push(service);
+                      } else {
+                        newServices = newServices.filter(s => s !== service);
+                      }
+                      updateBuyerMutation.mutate({ services_csv: newServices.join(",") });
+                    }}
+                  />
+                  <Label htmlFor={service} className="cursor-pointer">
+                    {service}
+                  </Label>
+                </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Pricing (Read-only) */}
+        {/* Pricing (read-only) */}
         <Card>
           <CardHeader>
             <CardTitle>Pricing</CardTitle>
-            <CardDescription>Your current pricing structure (contact support to modify)</CardDescription>
+            <CardDescription>Your current pricing structure</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex justify-between">
-              <span className="text-sm font-medium">Pricing Mode:</span>
-              <span className="text-sm">{buyer.pricing_mode}</span>
+              <span className="text-muted-foreground">Pricing mode:</span>
+              <span className="font-medium">{buyer.pricing_mode}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm font-medium">Shared Lead Price:</span>
-              <span className="text-sm">${Number(buyer.price_shared).toFixed(2)}</span>
+              <span className="text-muted-foreground">Shared lead price:</span>
+              <span className="font-medium">${Number(buyer.price_shared).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm font-medium">Exclusive Lead Price:</span>
-              <span className="text-sm">${Number(buyer.price_exclusive).toFixed(2)}</span>
+              <span className="text-muted-foreground">Exclusive lead price:</span>
+              <span className="font-medium">${Number(buyer.price_exclusive).toFixed(2)}</span>
             </div>
           </CardContent>
         </Card>
@@ -314,41 +310,32 @@ const BuyerDashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Lead ID</TableHead>
+                  <TableHead>Lead Name</TableHead>
                   <TableHead>Charge</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Refunded</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deliveries.length === 0 ? (
+                {recentDeliveries?.map((delivery: any) => (
+                  <TableRow key={delivery.id}>
+                    <TableCell>{new Date(delivery.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>{delivery.leads?.name || "N/A"}</TableCell>
+                    <TableCell>${Number(delivery.charge_amount).toFixed(2)}</TableCell>
+                    <TableCell>{delivery.refunded ? "Yes" : "No"}</TableCell>
+                  </TableRow>
+                ))}
+                {(!recentDeliveries || recentDeliveries.length === 0) && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground">
                       No deliveries yet
                     </TableCell>
                   </TableRow>
-                ) : (
-                  deliveries.map((delivery) => (
-                    <TableRow key={delivery.id}>
-                      <TableCell>{format(new Date(delivery.created_at), "MMM dd, yyyy")}</TableCell>
-                      <TableCell className="font-mono text-xs">{delivery.lead_id?.slice(0, 8)}...</TableCell>
-                      <TableCell>${Number(delivery.charge_amount).toFixed(2)}</TableCell>
-                      <TableCell>
-                        {delivery.refunded ? (
-                          <Badge variant="destructive">Refunded</Badge>
-                        ) : (
-                          <Badge variant="default">Charged</Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
                 )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   );
-};
-
-export default BuyerDashboard;
+}

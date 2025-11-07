@@ -1,79 +1,48 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 
-type Buyer = Database["public"]["Tables"]["buyers"]["Row"];
+export async function getCurrentBuyer() {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return null;
+  }
 
-export async function getCurrentBuyer(): Promise<Buyer | null> {
-  try {
-    // Get current auth user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      console.error("Auth error:", authError);
-      return null;
-    }
+  // First check if buyer_users mapping exists
+  const { data: buyerUser } = await supabase
+    .from("buyer_users")
+    .select("buyer_id")
+    .eq("id", user.id)
+    .single();
 
-    // Check if buyer_users mapping exists
-    const { data: buyerUser, error: buyerUserError } = await supabase
-      .from("buyer_users")
-      .select("buyer_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (buyerUserError) {
-      console.error("Error fetching buyer_users:", buyerUserError);
-      return null;
-    }
-
-    // If mapping exists, fetch the buyer
-    if (buyerUser) {
-      const { data: buyer, error: buyerError } = await supabase
-        .from("buyers")
-        .select("*")
-        .eq("id", buyerUser.buyer_id)
-        .single();
-
-      if (buyerError) {
-        console.error("Error fetching buyer:", buyerError);
-        return null;
-      }
-
-      return buyer;
-    }
-
-    // No mapping exists - try to auto-create one based on email match
-    const { data: matchingBuyer, error: matchError } = await supabase
+  if (buyerUser) {
+    // Fetch the buyer record
+    const { data: buyer } = await supabase
       .from("buyers")
       .select("*")
-      .eq("email", user.email!)
-      .maybeSingle();
+      .eq("id", buyerUser.buyer_id)
+      .single();
+    
+    return buyer;
+  }
 
-    if (matchError) {
-      console.error("Error finding matching buyer:", matchError);
-      return null;
-    }
+  // Auto-create mapping if buyer email matches
+  const { data: buyer } = await supabase
+    .from("buyers")
+    .select("*")
+    .eq("email", user.email)
+    .single();
 
-    if (!matchingBuyer) {
-      // No buyer with this email exists
-      return null;
-    }
-
+  if (buyer) {
     // Create the buyer_users mapping
-    const { error: insertError } = await supabase
+    await supabase
       .from("buyer_users")
       .insert({
         id: user.id,
-        buyer_id: matchingBuyer.id,
+        buyer_id: buyer.id
       });
-
-    if (insertError) {
-      console.error("Error creating buyer_users mapping:", insertError);
-      return null;
-    }
-
-    return matchingBuyer;
-  } catch (error) {
-    console.error("Unexpected error in getCurrentBuyer:", error);
-    return null;
+    
+    return buyer;
   }
+
+  return null;
 }
