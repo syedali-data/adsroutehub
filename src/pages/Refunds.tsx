@@ -24,7 +24,7 @@ const Refunds = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("refund_requests")
-        .select("*, deliveries(*, leads(name, email), buyers(business_name))")
+        .select("*, deliveries(id, charge_amount, leads(id, name, email), buyers(id, business_name))")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -55,17 +55,20 @@ const Refunds = () => {
     const request = refundRequests?.find((r) => r.id === id);
     if (!request) throw new Error("Refund request not found");
 
+    const delivery = request.deliveries;
+
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         refund_request_id: request.id,
-        delivery_id: request.delivery_id,
-        buyer_id: request.deliveries?.buyers?.business_name,
-        lead_id: request.deliveries?.leads?.name,
+        delivery_id: request.delivery_id ?? delivery?.id,
+        buyer_id: delivery?.buyers?.id,
+        lead_id: delivery?.leads?.id,
         new_status: status,
         previous_status: request.status,
         reason: request.reason,
+        charge_amount: delivery?.charge_amount ?? null,
         created_ts: request.created_at,
       }),
     });
