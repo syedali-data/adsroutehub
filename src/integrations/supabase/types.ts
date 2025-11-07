@@ -129,9 +129,13 @@ export type Database = {
           channel: Database["public"]["Enums"]["delivery_channel"]
           charge_amount: number
           claimed: boolean
+          closed_at: string | null
+          contacted_at: string | null
           created_at: string
           id: string
           lead_id: string | null
+          outcome_notes: string | null
+          outcome_reason: string | null
           refund_reason: string | null
           refund_ts: string | null
           refunded: boolean
@@ -144,9 +148,13 @@ export type Database = {
           channel?: Database["public"]["Enums"]["delivery_channel"]
           charge_amount?: number
           claimed?: boolean
+          closed_at?: string | null
+          contacted_at?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
+          outcome_notes?: string | null
+          outcome_reason?: string | null
           refund_reason?: string | null
           refund_ts?: string | null
           refunded?: boolean
@@ -159,9 +167,13 @@ export type Database = {
           channel?: Database["public"]["Enums"]["delivery_channel"]
           charge_amount?: number
           claimed?: boolean
+          closed_at?: string | null
+          contacted_at?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
+          outcome_notes?: string | null
+          outcome_reason?: string | null
           refund_reason?: string | null
           refund_ts?: string | null
           refunded?: boolean

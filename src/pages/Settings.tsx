@@ -137,6 +137,34 @@ const Settings = () => {
               placeholder="https://..."
             />
           </div>
+
+          <Separator />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="use-n8n-claims">Enable n8n Claims Handler</Label>
+              <p className="text-sm text-muted-foreground">
+                Process claim updates through n8n webhook
+              </p>
+            </div>
+            <Switch
+              id="use-n8n-claims"
+              checked={settings["USE_N8N_CLAIMS"] === "true"}
+              onCheckedChange={(checked) =>
+                updateSetting("USE_N8N_CLAIMS", checked ? "true" : "false")
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="n8n-claim-url">n8n Claim Webhook URL</Label>
+            <Input
+              id="n8n-claim-url"
+              value={settings["N8N_CLAIM_WEBHOOK_URL"] || ""}
+              onChange={(e) => updateSetting("N8N_CLAIM_WEBHOOK_URL", e.target.value)}
+              placeholder="https://..."
+            />
+          </div>
         </CardContent>
       </Card>
 

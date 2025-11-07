@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -12,18 +13,30 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Check, X } from "lucide-react";
+import { Check, X, Phone, Trophy, ThumbsDown } from "lucide-react";
+import { ClaimDialog } from "@/components/deliveries/ClaimDialog";
+import { getSettingsMap } from "@/lib/settings";
 
 const Deliveries = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [claimDialog, setClaimDialog] = useState<{
+    open: boolean;
+    type: "won" | "lost";
+    deliveryId: string | null;
+  }>({ open: false, type: "won", deliveryId: null });
 
   const { data: deliveries, isLoading } = useQuery({
     queryKey: ["deliveries"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("deliveries")
-        .select("*, leads(name, email), buyers(business_name), campaigns(name)")
+        .select(`
+          *,
+          leads(id, name, email),
+          buyers(id, business_name),
+          campaigns(name)
+        `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -31,26 +44,148 @@ const Deliveries = () => {
     },
   });
 
-  const toggleStatus = useMutation({
-    mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
-      const { error } = await supabase
-        .from("deliveries")
-        .update({ [field]: value })
-        .eq("id", id);
-      if (error) throw error;
+  // Helper to update claim locally
+  async function updateClaimLocally(
+    id: string,
+    updates: {
+      claimed?: boolean;
+      won?: boolean | null;
+      contacted_at?: string | null;
+      closed_at?: string | null;
+      outcome_reason?: string | null;
+      outcome_notes?: string | null;
+      refunded?: boolean;
+    }
+  ) {
+    const { error } = await supabase.from("deliveries").update(updates).eq("id", id);
+    if (error) throw error;
+  }
+
+  // Helper to send claim to n8n
+  async function sendClaimToN8n(
+    id: string,
+    updates: {
+      claimed?: boolean;
+      won?: boolean | null;
+      contacted_at?: string | null;
+      closed_at?: string | null;
+      outcome_reason?: string | null;
+      outcome_notes?: string | null;
+      refunded?: boolean;
+    },
+    webhookUrl: string
+  ) {
+    const { data, error } = await supabase
+      .from("deliveries")
+      .select("*, leads(id, name, email), buyers(id, business_name)")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) throw error || new Error("Delivery not found");
+
+    const payload = {
+      delivery_id: data.id,
+      buyer_id: data.buyers?.id,
+      lead_id: data.leads?.id,
+      charge_amount: data.charge_amount,
+      claimed: updates.claimed ?? data.claimed,
+      won: updates.won ?? data.won,
+      contacted_at: updates.contacted_at ?? data.contacted_at,
+      closed_at: updates.closed_at ?? data.closed_at,
+      outcome_reason: updates.outcome_reason ?? data.outcome_reason,
+      outcome_notes: updates.outcome_notes ?? data.outcome_notes,
+      refunded: updates.refunded ?? data.refunded,
+    };
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`n8n claim webhook failed: ${response.statusText}`);
+    }
+  }
+
+  const updateClaim = useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: {
+        claimed?: boolean;
+        won?: boolean | null;
+        contacted_at?: string | null;
+        closed_at?: string | null;
+        outcome_reason?: string | null;
+        outcome_notes?: string | null;
+        refunded?: boolean;
+      };
+    }) => {
+      const settingsMap = await getSettingsMap(supabase);
+      const useN8nClaims = settingsMap["USE_N8N_CLAIMS"] === "true";
+      const webhookUrl = settingsMap["N8N_CLAIM_WEBHOOK_URL"];
+
+      if (useN8nClaims && webhookUrl) {
+        await sendClaimToN8n(id, updates, webhookUrl);
+      } else {
+        await updateClaimLocally(id, updates);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deliveries"] });
-      toast({ title: "Updated", description: "Delivery status updated." });
+      toast({ title: "Updated", description: "Delivery updated successfully." });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update delivery status.",
+        description: error.message || "Failed to update delivery.",
         variant: "destructive",
       });
     },
   });
+
+  const handleMarkContacted = (deliveryId: string) => {
+    updateClaim.mutate({
+      id: deliveryId,
+      updates: {
+        claimed: true,
+        contacted_at: new Date().toISOString(),
+      },
+    });
+  };
+
+  const handleClaimDialogSubmit = (reason: string, notes: string) => {
+    if (!claimDialog.deliveryId) return;
+
+    updateClaim.mutate({
+      id: claimDialog.deliveryId,
+      updates: {
+        claimed: true,
+        won: claimDialog.type === "won",
+        closed_at: new Date().toISOString(),
+        outcome_reason: reason || null,
+        outcome_notes: notes || null,
+      },
+    });
+
+    setClaimDialog({ open: false, type: "won", deliveryId: null });
+  };
+
+  const getClaimStatusBadge = (delivery: any) => {
+    if (delivery.won === true) {
+      return <Badge className="bg-green-600">Won</Badge>;
+    }
+    if (delivery.won === false) {
+      return <Badge variant="destructive">Lost</Badge>;
+    }
+    if (delivery.claimed) {
+      return <Badge variant="secondary">Contacted - Pending</Badge>;
+    }
+    return <Badge variant="outline">Not Contacted</Badge>;
+  };
 
   return (
     <div className="space-y-6">
@@ -69,20 +204,21 @@ const Deliveries = () => {
               <TableHead>Campaign</TableHead>
               <TableHead>Channel</TableHead>
               <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Claim Status</TableHead>
+              <TableHead>Refund Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center">
+                <TableCell colSpan={9} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : deliveries?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No deliveries found
                 </TableCell>
               </TableRow>
@@ -95,39 +231,72 @@ const Deliveries = () => {
                   <TableCell>{delivery.campaigns?.name || "N/A"}</TableCell>
                   <TableCell className="uppercase">{delivery.channel}</TableCell>
                   <TableCell>${delivery.charge_amount}</TableCell>
+                  <TableCell>{getClaimStatusBadge(delivery)}</TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
-                      {delivery.claimed && <Badge variant="outline">Claimed</Badge>}
-                      {delivery.won && <Badge className="bg-accent">Won</Badge>}
-                      {delivery.refunded && <Badge className="bg-destructive">Refunded</Badge>}
-                      {!delivery.claimed && !delivery.won && !delivery.refunded && (
-                        <Badge variant="secondary">Pending</Badge>
-                      )}
-                    </div>
+                    {delivery.refunded ? (
+                      <Badge variant="destructive">Refunded</Badge>
+                    ) : (
+                      <Badge variant="outline">Active</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant={delivery.claimed ? "default" : "outline"}
-                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "claimed", value: !delivery.claimed })}
-                        title="Toggle Claimed"
-                      >
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={delivery.won ? "default" : "outline"}
-                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "won", value: !delivery.won })}
-                        title="Toggle Won"
-                      >
-                        W
-                      </Button>
+                      {!delivery.claimed && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMarkContacted(delivery.id)}
+                          title="Mark Contacted"
+                          disabled={updateClaim.isPending}
+                        >
+                          <Phone className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {delivery.claimed && delivery.won === null && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() =>
+                              setClaimDialog({
+                                open: true,
+                                type: "won",
+                                deliveryId: delivery.id,
+                              })
+                            }
+                            title="Mark Won"
+                            disabled={updateClaim.isPending}
+                          >
+                            <Trophy className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              setClaimDialog({
+                                open: true,
+                                type: "lost",
+                                deliveryId: delivery.id,
+                              })
+                            }
+                            title="Mark Lost"
+                            disabled={updateClaim.isPending}
+                          >
+                            <ThumbsDown className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                       <Button
                         size="sm"
                         variant={delivery.refunded ? "destructive" : "outline"}
-                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "refunded", value: !delivery.refunded })}
+                        onClick={() =>
+                          updateClaim.mutate({
+                            id: delivery.id,
+                            updates: { refunded: !delivery.refunded },
+                          })
+                        }
                         title="Toggle Refunded"
+                        disabled={updateClaim.isPending}
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -139,6 +308,16 @@ const Deliveries = () => {
           </TableBody>
         </Table>
       </div>
+
+      <ClaimDialog
+        open={claimDialog.open}
+        onOpenChange={(open) =>
+          setClaimDialog((prev) => ({ ...prev, open }))
+        }
+        onSubmit={handleClaimDialogSubmit}
+        type={claimDialog.type}
+        isPending={updateClaim.isPending}
+      />
     </div>
   );
 };
