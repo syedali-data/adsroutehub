@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -11,9 +11,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { AddBuyerDialog } from "@/components/buyers/AddBuyerDialog";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 
 const Buyers = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: buyers, isLoading } = useQuery({
     queryKey: ["buyers"],
@@ -25,6 +36,45 @@ const Buyers = () => {
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: "active" | "paused" | "test" }) => {
+      const { error } = await supabase
+        .from("buyers")
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buyers"] });
+      toast({ title: "Updated", description: "Buyer status updated." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update status.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteBuyer = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("buyers").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buyers"] });
+      toast({ title: "Deleted", description: "Buyer deleted." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Cannot delete buyer with linked deliveries. Please archive instead.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -59,29 +109,31 @@ const Buyers = () => {
               <TableHead>Free Leads</TableHead>
               <TableHead>Response Rate</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center">
+                <TableCell colSpan={9} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : buyers?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No buyers found
                 </TableCell>
               </TableRow>
             ) : (
               buyers?.map((buyer) => (
-                <TableRow
-                  key={buyer.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/buyers/${buyer.id}`)}
-                >
-                  <TableCell className="font-medium">{buyer.business_name}</TableCell>
+                <TableRow key={buyer.id}>
+                  <TableCell
+                    className="font-medium cursor-pointer hover:underline"
+                    onClick={() => navigate(`/buyers/${buyer.id}`)}
+                  >
+                    {buyer.business_name}
+                  </TableCell>
                   <TableCell className="capitalize">{buyer.city}</TableCell>
                   <TableCell>{buyer.email}</TableCell>
                   <TableCell>{buyer.daily_cap}</TableCell>
@@ -90,6 +142,47 @@ const Buyers = () => {
                   <TableCell>{(buyer.response_rate * 100).toFixed(0)}%</TableCell>
                   <TableCell>
                     <Badge className={getStatusColor(buyer.status)}>{buyer.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-background">
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          updateStatus.mutate({ id: buyer.id, status: "active" });
+                        }}>
+                          Set Active
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          updateStatus.mutate({ id: buyer.id, status: "paused" });
+                        }}>
+                          Set Paused
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          updateStatus.mutate({ id: buyer.id, status: "test" });
+                        }}>
+                          Set Test
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Are you sure you want to delete this buyer?")) {
+                              deleteBuyer.mutate(buyer.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))

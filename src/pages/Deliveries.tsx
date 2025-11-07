@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -10,8 +10,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Check, X } from "lucide-react";
 
 const Deliveries = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: deliveries, isLoading } = useQuery({
     queryKey: ["deliveries"],
     queryFn: async () => {
@@ -22,6 +28,27 @@ const Deliveries = () => {
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const toggleStatus = useMutation({
+    mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
+      const { error } = await supabase
+        .from("deliveries")
+        .update({ [field]: value })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+      toast({ title: "Updated", description: "Delivery status updated." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update delivery status.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -43,18 +70,19 @@ const Deliveries = () => {
               <TableHead>Channel</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">
+                <TableCell colSpan={8} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : deliveries?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No deliveries found
                 </TableCell>
               </TableRow>
@@ -75,6 +103,34 @@ const Deliveries = () => {
                       {!delivery.claimed && !delivery.won && !delivery.refunded && (
                         <Badge variant="secondary">Pending</Badge>
                       )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant={delivery.claimed ? "default" : "outline"}
+                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "claimed", value: !delivery.claimed })}
+                        title="Toggle Claimed"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={delivery.won ? "default" : "outline"}
+                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "won", value: !delivery.won })}
+                        title="Toggle Won"
+                      >
+                        W
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={delivery.refunded ? "destructive" : "outline"}
+                        onClick={() => toggleStatus.mutate({ id: delivery.id, field: "refunded", value: !delivery.refunded })}
+                        title="Toggle Refunded"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
