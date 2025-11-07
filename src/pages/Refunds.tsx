@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Check, X } from "lucide-react";
+import { getSettingsMap } from "@/lib/settings";
 
 const Refunds = () => {
   const { toast } = useToast();
@@ -31,23 +32,62 @@ const Refunds = () => {
     },
   });
 
+  const updateRefundLocally = async (id: string, status: "approved" | "rejected") => {
+    const { error } = await supabase
+      .from("refund_requests")
+      .update({ status, handled_ts: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    if (status === "approved") {
+      const request = refundRequests?.find((r) => r.id === id);
+      if (request?.delivery_id) {
+        await supabase
+          .from("deliveries")
+          .update({ refunded: true, refund_ts: new Date().toISOString() })
+          .eq("id", request.delivery_id);
+      }
+    }
+  };
+
+  const sendRefundToN8n = async (id: string, status: "approved" | "rejected", webhookUrl: string) => {
+    const request = refundRequests?.find((r) => r.id === id);
+    if (!request) throw new Error("Refund request not found");
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        refund_request_id: request.id,
+        delivery_id: request.delivery_id,
+        buyer_id: request.deliveries?.buyers?.business_name,
+        lead_id: request.deliveries?.leads?.name,
+        new_status: status,
+        previous_status: request.status,
+        reason: request.reason,
+        created_ts: request.created_at,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook call failed: ${response.statusText}`);
+    }
+  };
+
   const handleRefundMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
-      const { error } = await supabase
-        .from("refund_requests")
-        .update({ status, handled_ts: new Date().toISOString() })
-        .eq("id", id);
+      // Fetch settings to determine routing
+      const settingsMap = await getSettingsMap(supabase);
+      const useN8n = settingsMap["USE_N8N_REFUNDS"] === "true";
+      const webhookUrl = settingsMap["N8N_REFUND_WEBHOOK_URL"];
 
-      if (error) throw error;
-
-      if (status === "approved") {
-        const request = refundRequests?.find((r) => r.id === id);
-        if (request?.delivery_id) {
-          await supabase
-            .from("deliveries")
-            .update({ refunded: true, refund_ts: new Date().toISOString() })
-            .eq("id", request.delivery_id);
-        }
+      if (useN8n && webhookUrl) {
+        // Use n8n webhook
+        await sendRefundToN8n(id, status, webhookUrl);
+      } else {
+        // Use direct Supabase updates
+        await updateRefundLocally(id, status);
       }
     },
     onSuccess: () => {
@@ -57,7 +97,7 @@ const Refunds = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to process refund",
         variant: "destructive",
       });
     },
