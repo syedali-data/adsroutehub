@@ -27,8 +27,25 @@ serve(async (req) => {
       );
     }
 
-    // Dedupe check
-    const hash_24h = `${email.toLowerCase()}_${phone}_${Date.now()}`;
+    // Dedupe check - date-based hash for 24h window
+    const today = new Date().toISOString().split('T')[0]; // "2025-11-07"
+    const hash_24h = `${email.toLowerCase()}_${phone}_${today}`;
+
+    // Check for duplicates in last 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('hash_24h', hash_24h)
+      .gte('created_at', twentyFourHoursAgo)
+      .maybeSingle();
+
+    if (existingLead) {
+      return new Response(
+        JSON.stringify({ error: 'Duplicate lead detected within 24 hours' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Find campaign
     const { data: campaign } = await supabase
@@ -78,26 +95,68 @@ serve(async (req) => {
         .ilike('services_csv', `%${service_type}%`)
         .eq('city', city.toLowerCase());
 
-      // Filter buyers under daily cap and sort by response_rate
-      const selectedBuyers = buyers
-        ?.filter(b => b.daily_sent < b.daily_cap)
+      // Filter buyers under daily cap
+      let eligibleBuyers = buyers?.filter(b => b.daily_sent < b.daily_cap) || [];
+
+      // For shared leads, also enforce shared_cap per lead
+      if (exclusivity === 'shared' && eligibleBuyers.length > 0) {
+        const buyerIds = eligibleBuyers.map(b => b.id);
+        
+        // Count existing deliveries per buyer for this lead
+        const { data: existingDeliveries } = await supabase
+          .from('deliveries')
+          .select('buyer_id')
+          .eq('lead_id', lead.id)
+          .in('buyer_id', buyerIds);
+        
+        const deliveryCountByBuyer: Record<string, number> = {};
+        existingDeliveries?.forEach(d => {
+          deliveryCountByBuyer[d.buyer_id] = (deliveryCountByBuyer[d.buyer_id] || 0) + 1;
+        });
+        
+        // Filter out buyers who have reached shared_cap for this lead
+        eligibleBuyers = eligibleBuyers.filter(b => {
+          const deliveryCount = deliveryCountByBuyer[b.id] || 0;
+          return deliveryCount < b.shared_cap;
+        });
+      }
+
+      // Sort by response_rate and take top N
+      const selectedBuyers = eligibleBuyers
         .sort((a, b) => b.response_rate - a.response_rate)
-        .slice(0, exclusivity === 'exclusive' ? 1 : 3) || [];
+        .slice(0, exclusivity === 'exclusive' ? 1 : 3);
 
       // Create deliveries
       for (const buyer of selectedBuyers) {
+        // Determine charge amount based on free leads
+        let chargeAmount: number;
+        let newFreeLeadsLeft = buyer.free_leads_left;
+        
+        if (buyer.free_leads_left > 0) {
+          // Use free lead credit
+          chargeAmount = 0;
+          newFreeLeadsLeft = buyer.free_leads_left - 1;
+        } else {
+          // Normal pricing
+          chargeAmount = exclusivity === 'exclusive' ? buyer.price_exclusive : buyer.price_shared;
+        }
+        
+        // Insert delivery
         await supabase.from('deliveries').insert({
           lead_id: lead.id,
           buyer_id: buyer.id,
           campaign_id: campaign?.id,
-          charge_amount: exclusivity === 'exclusive' ? buyer.price_exclusive : buyer.price_shared,
+          charge_amount: chargeAmount,
           source: 'internal',
         });
 
-        // Update buyer daily_sent
+        // Update buyer: increment daily_sent and decrement free_leads_left
         await supabase
           .from('buyers')
-          .update({ daily_sent: buyer.daily_sent + 1 })
+          .update({ 
+            daily_sent: buyer.daily_sent + 1,
+            free_leads_left: newFreeLeadsLeft
+          })
           .eq('id', buyer.id);
       }
     }
