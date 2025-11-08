@@ -3,10 +3,11 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { getCurrentBuyer } from "@/lib/buyerAuth";
+import { Button } from "@/components/ui/button";
 
 export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [hasBuyerAccess, setHasBuyerAccess] = useState<boolean>(false);
+  const [buyer, setBuyer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,9 +16,9 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        // Call getCurrentBuyer - this will auto-create the mapping and role if needed
-        const buyer = await getCurrentBuyer();
-        setHasBuyerAccess(!!buyer);
+        // getCurrentBuyer will auto-create mapping and role if buyer email matches
+        const buyerData = await getCurrentBuyer();
+        setBuyer(buyerData);
       }
       
       setLoading(false);
@@ -31,12 +32,13 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        // Call getCurrentBuyer - this will auto-create the mapping and role if needed
-        const buyer = await getCurrentBuyer();
-        setHasBuyerAccess(!!buyer);
+        const buyerData = await getCurrentBuyer();
+        setBuyer(buyerData);
       } else {
-        setHasBuyerAccess(false);
+        setBuyer(null);
       }
+      
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -54,21 +56,20 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     return <Navigate to="/buyer/login" replace />;
   }
 
-  if (!hasBuyerAccess) {
-    // No buyer account found for this email
+  if (!buyer) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="text-center max-w-md space-y-4">
           <h2 className="text-2xl font-bold">Access Denied</h2>
           <p className="text-muted-foreground">
-            No buyer account is linked to this email. Please contact support.
+            No buyer account is linked to this email ({session.user.email}). Please contact support.
           </p>
-          <button 
+          <Button 
             onClick={() => supabase.auth.signOut()} 
-            className="text-primary hover:underline"
+            variant="outline"
           >
             Sign out
-          </button>
+          </Button>
         </div>
       </div>
     );
