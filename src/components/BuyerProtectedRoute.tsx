@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
-import { checkIsBuyer } from "@/lib/userRoles";
-import { canUserBecomeBuyer } from "@/lib/buyerAuth";
+import { getCurrentBuyer } from "@/lib/buyerAuth";
 
 export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [isBuyerOrCanBe, setIsBuyerOrCanBe] = useState<boolean>(false);
+  const [hasBuyerAccess, setHasBuyerAccess] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,10 +15,9 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        // Check if they ARE a buyer OR CAN BECOME one (email matches)
-        const isBuyer = await checkIsBuyer();
-        const canBeBuyer = !isBuyer ? await canUserBecomeBuyer() : false;
-        setIsBuyerOrCanBe(isBuyer || canBeBuyer);
+        // Call getCurrentBuyer - this will auto-create the mapping and role if needed
+        const buyer = await getCurrentBuyer();
+        setHasBuyerAccess(!!buyer);
       }
       
       setLoading(false);
@@ -33,11 +31,11 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        const isBuyer = await checkIsBuyer();
-        const canBeBuyer = !isBuyer ? await canUserBecomeBuyer() : false;
-        setIsBuyerOrCanBe(isBuyer || canBeBuyer);
+        // Call getCurrentBuyer - this will auto-create the mapping and role if needed
+        const buyer = await getCurrentBuyer();
+        setHasBuyerAccess(!!buyer);
       } else {
-        setIsBuyerOrCanBe(false);
+        setHasBuyerAccess(false);
       }
     });
 
@@ -56,10 +54,24 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     return <Navigate to="/buyer/login" replace />;
   }
 
-  if (!isBuyerOrCanBe) {
-    // Not a buyer and email doesn't match any buyer - sign them out and send to login
-    supabase.auth.signOut();
-    return <Navigate to="/buyer/login" replace />;
+  if (!hasBuyerAccess) {
+    // No buyer account found for this email
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="text-center max-w-md space-y-4">
+          <h2 className="text-2xl font-bold">Access Denied</h2>
+          <p className="text-muted-foreground">
+            No buyer account is linked to this email. Please contact support.
+          </p>
+          <button 
+            onClick={() => supabase.auth.signOut()} 
+            className="text-primary hover:underline"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;
