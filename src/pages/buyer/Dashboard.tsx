@@ -121,7 +121,8 @@ export default function BuyerDashboard() {
 
   useEffect(() => {
     if (!isLoading && !buyer) {
-      console.error("Buyer dashboard error:", error);
+      console.error("[BuyerDashboard] No buyer found after loading:", error);
+      
       const errorMessage = error 
         ? `Setup failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
         : "No buyer account is associated with this email. Please contact support.";
@@ -134,8 +135,11 @@ export default function BuyerDashboard() {
       
       // Give user time to see the error before redirecting
       setTimeout(() => {
+        console.log("[BuyerDashboard] Redirecting to login");
         navigate("/buyer/login");
       }, 3000);
+    } else if (buyer) {
+      console.log("[BuyerDashboard] Buyer loaded successfully:", buyer.business_name, buyer.email);
     }
   }, [buyer, isLoading, error, navigate, toast]);
 

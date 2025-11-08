@@ -3,36 +3,49 @@ import { supabase } from "@/integrations/supabase/client";
 export async function getCurrentBuyer() {
   const { data: { user } } = await supabase.auth.getUser();
   
+  console.log("[buyerAuth] getCurrentBuyer called, user:", user?.id, user?.email);
+  
   if (!user) {
+    console.log("[buyerAuth] No user found");
     return null;
   }
 
   // First check if buyer_users mapping exists
-  const { data: buyerUser } = await supabase
+  const { data: buyerUser, error: buyerUserError } = await supabase
     .from("buyer_users")
     .select("buyer_id")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
+
+  console.log("[buyerAuth] Checked buyer_users:", { buyerUser, error: buyerUserError });
 
   if (buyerUser) {
+    console.log("[buyerAuth] Found existing mapping, fetching buyer:", buyerUser.buyer_id);
     // Fetch the buyer record
-    const { data: buyer } = await supabase
+    const { data: buyer, error: buyerError } = await supabase
       .from("buyers")
       .select("*")
       .eq("id", buyerUser.buyer_id)
-      .single();
+      .maybeSingle();
     
+    console.log("[buyerAuth] Fetched buyer:", { buyer, error: buyerError });
     return buyer;
   }
 
   // Auto-create mapping if buyer email matches
-  const { data: buyer } = await supabase
+  console.log("[buyerAuth] No mapping found, checking for buyer with email:", user.email);
+  
+  const { data: buyer, error: buyerLookupError } = await supabase
     .from("buyers")
     .select("*")
     .eq("email", user.email)
-    .single();
+    .maybeSingle();
+
+  console.log("[buyerAuth] Buyer lookup result:", { buyer, error: buyerLookupError });
 
   if (buyer) {
+    console.log("[buyerAuth] Found matching buyer, creating mapping and role");
+    
     // Create the buyer_users mapping
     const { error: mappingError } = await supabase
       .from("buyer_users")
@@ -42,8 +55,14 @@ export async function getCurrentBuyer() {
       });
     
     if (mappingError) {
-      console.error("Failed to create buyer mapping:", mappingError);
-      throw mappingError;
+      console.error("[buyerAuth] Failed to create buyer mapping:", mappingError);
+      // Check if it's a duplicate key error (mapping already exists)
+      if (!mappingError.message?.includes("duplicate")) {
+        throw mappingError;
+      }
+      console.log("[buyerAuth] Mapping already exists, continuing");
+    } else {
+      console.log("[buyerAuth] Successfully created buyer_users mapping");
     }
     
     // Assign buyer role
@@ -55,13 +74,20 @@ export async function getCurrentBuyer() {
       });
     
     if (roleError) {
-      console.error("Failed to create buyer role:", roleError);
-      throw roleError;
+      console.error("[buyerAuth] Failed to create buyer role:", roleError);
+      // Check if it's a duplicate key error (role already exists)
+      if (!roleError.message?.includes("duplicate")) {
+        throw roleError;
+      }
+      console.log("[buyerAuth] Role already exists, continuing");
+    } else {
+      console.log("[buyerAuth] Successfully created buyer role");
     }
     
     return buyer;
   }
 
+  console.log("[buyerAuth] No matching buyer found for email:", user.email);
   return null;
 }
 

@@ -37,12 +37,14 @@ export default function BuyerLogin() {
     setLoading(true);
 
     try {
-      // First check if this email exists as a buyer
-      const { data: buyerExists } = await supabase
-        .from("buyers")
-        .select("id")
-        .eq("email", email)
-        .single();
+      // Check if this email exists as a buyer using security definer function
+      const { data: buyerExists, error: checkError } = await supabase
+        .rpc("buyer_email_exists", { _email: email.trim() });
+
+      if (checkError) {
+        console.error("Error checking buyer email:", checkError);
+        throw new Error("Failed to validate email. Please try again.");
+      }
 
       if (!buyerExists) {
         toast({
@@ -55,7 +57,7 @@ export default function BuyerLogin() {
       }
 
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: email.trim(),
         options: {
           emailRedirectTo: `${window.location.origin}/buyer/dashboard`,
         },
