@@ -3,8 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminProtectedRoute } from "@/components/AdminProtectedRoute";
+import { BuyerProtectedRoute } from "@/components/BuyerProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Buyers from "./pages/Buyers";
@@ -26,81 +28,91 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Dashboard />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/leads"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Leads />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/buyers"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Buyers />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/deliveries"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Deliveries />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/refunds"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Refunds />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/campaigns"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Campaigns />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout>
-                  <Settings />
-                </DashboardLayout>
-              </ProtectedRoute>
-            }
-          />
           
           {/* Buyer Portal Routes */}
           <Route path="/buyer/login" element={<BuyerLogin />} />
-          <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
+          <Route 
+            path="/buyer/dashboard" 
+            element={
+              <BuyerProtectedRoute>
+                <BuyerDashboard />
+              </BuyerProtectedRoute>
+            } 
+          />
+          
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Dashboard />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/leads"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Leads />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/buyers"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Buyers />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/deliveries"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Deliveries />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/refunds"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Refunds />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/campaigns"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Campaigns />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <AdminProtectedRoute>
+                <DashboardLayout>
+                  <Settings />
+                </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

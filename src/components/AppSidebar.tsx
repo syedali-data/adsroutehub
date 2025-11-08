@@ -28,13 +28,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 
 const menuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Leads", url: "/leads", icon: FileText },
-  { title: "Buyers", url: "/buyers", icon: Users },
-  { title: "Deliveries", url: "/deliveries", icon: Truck },
-  { title: "Refunds", url: "/refunds", icon: AlertCircle },
-  { title: "Campaigns", url: "/campaigns", icon: Tag },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
+  { title: "Leads", url: "/admin/leads", icon: FileText },
+  { title: "Buyers", url: "/admin/buyers", icon: Users },
+  { title: "Deliveries", url: "/admin/deliveries", icon: Truck },
+  { title: "Refunds", url: "/admin/refunds", icon: AlertCircle },
+  { title: "Campaigns", url: "/admin/campaigns", icon: Tag },
+  { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
 export function AppSidebar() {

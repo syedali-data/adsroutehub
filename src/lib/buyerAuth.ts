@@ -33,12 +33,20 @@ export async function getCurrentBuyer() {
     .single();
 
   if (buyer) {
-    // Create the buyer_users mapping
+    // Create the buyer_users mapping and buyer role
     await supabase
       .from("buyer_users")
       .insert({
         id: user.id,
         buyer_id: buyer.id
+      });
+    
+    // Assign buyer role
+    await supabase
+      .from("user_roles")
+      .insert({
+        user_id: user.id,
+        role: 'buyer'
       });
     
     return buyer;
