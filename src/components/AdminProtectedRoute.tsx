@@ -53,7 +53,7 @@ export const AdminProtectedRoute = ({ children }: { children: React.ReactNode })
   }
 
   if (!isAdmin) {
-    return <Navigate to="/buyer/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

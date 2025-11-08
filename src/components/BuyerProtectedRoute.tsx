@@ -57,7 +57,8 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
   }
 
   if (!isBuyerOrCanBe) {
-    // Not a buyer and email doesn't match any buyer
+    // Not a buyer and email doesn't match any buyer - sign them out and send to login
+    supabase.auth.signOut();
     return <Navigate to="/buyer/login" replace />;
   }
 
