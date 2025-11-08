@@ -37,6 +37,23 @@ export default function BuyerLogin() {
     setLoading(true);
 
     try {
+      // First check if this email exists as a buyer
+      const { data: buyerExists } = await supabase
+        .from("buyers")
+        .select("id")
+        .eq("email", email)
+        .single();
+
+      if (!buyerExists) {
+        toast({
+          title: "Access denied",
+          description: "We couldn't find a buyer account for this email. Please contact support.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
@@ -51,9 +68,10 @@ export default function BuyerLogin() {
         description: "We sent you a login link. Click it to access your dashboard.",
       });
     } catch (error: any) {
+      console.error("Buyer login error:", error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to send login link. Please try again.",
         variant: "destructive",
       });
     } finally {

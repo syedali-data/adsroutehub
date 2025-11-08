@@ -557,6 +557,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_email_matches_buyer: {
+        Args: { _buyer_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "buyer"
