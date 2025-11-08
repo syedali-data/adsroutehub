@@ -10,21 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Checkbox } from "@/components/ui/checkbox";
-
-const SERVICE_OPTIONS = [
-  "hvac contractor",
-  "closet design",
-  "plumbing",
-  "electrical",
-  "roofing",
-  "painting",
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { ServiceMultiSelect } from "@/components/buyers/ServiceMultiSelect";
+import { TrendingUp, DollarSign, Package, Calendar } from "lucide-react";
 
 export default function BuyerDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Local state for form editing
+  const [statusActive, setStatusActive] = useState(true);
+  const [dailyCap, setDailyCap] = useState(10);
+  const [sharedCap, setSharedCap] = useState(3);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [hasUnsavedCapacity, setHasUnsavedCapacity] = useState(false);
+  const [hasUnsavedServices, setHasUnsavedServices] = useState(false);
 
   const { data: buyer, isLoading, error } = useQuery({
     queryKey: ["current-buyer"],
@@ -87,8 +88,8 @@ export default function BuyerDashboard() {
     enabled: !!buyer,
   });
 
-  const updateBuyerMutation = useMutation({
-    mutationFn: async (updates: any) => {
+  const updateCapacityMutation = useMutation({
+    mutationFn: async (updates: { status?: "active" | "paused"; daily_cap?: number; shared_cap?: number }) => {
       if (!buyer) throw new Error("No buyer found");
       
       const { error } = await supabase
@@ -100,9 +101,38 @@ export default function BuyerDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["current-buyer"] });
+      setHasUnsavedCapacity(false);
       toast({
         title: "Settings updated",
-        description: "Your preferences have been saved.",
+        description: "Status & capacity preferences saved.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateServicesMutation = useMutation({
+    mutationFn: async (services: string[]) => {
+      if (!buyer) throw new Error("No buyer found");
+      
+      const { error } = await supabase
+        .from("buyers")
+        .update({ services_csv: services.join(",") })
+        .eq("id", buyer.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["current-buyer"] });
+      setHasUnsavedServices(false);
+      toast({
+        title: "Services updated",
+        description: "Your service preferences have been saved.",
       });
     },
     onError: (error: any) => {
@@ -119,6 +149,30 @@ export default function BuyerDashboard() {
     navigate("/buyer/login");
   };
 
+  const handleSaveCapacity = () => {
+    updateCapacityMutation.mutate({
+      status: statusActive ? "active" : "paused",
+      daily_cap: dailyCap,
+      shared_cap: sharedCap,
+    });
+  };
+
+  const handleSaveServices = () => {
+    updateServicesMutation.mutate(selectedServices);
+  };
+
+  // Sync local state with buyer data when it loads
+  useEffect(() => {
+    if (buyer) {
+      setStatusActive(buyer.status === "active");
+      setDailyCap(buyer.daily_cap);
+      setSharedCap(buyer.shared_cap);
+      setSelectedServices(buyer.services_csv?.split(",").map(s => s.trim()).filter(Boolean) || []);
+      setHasUnsavedCapacity(false);
+      setHasUnsavedServices(false);
+    }
+  }, [buyer]);
+
   useEffect(() => {
     if (!isLoading && !buyer) {
       console.error("[BuyerDashboard] No buyer found after loading:", error);
@@ -133,7 +187,6 @@ export default function BuyerDashboard() {
         variant: "destructive",
       });
       
-      // Give user time to see the error before redirecting
       setTimeout(() => {
         console.log("[BuyerDashboard] Redirecting to login");
         navigate("/buyer/login");
@@ -156,200 +209,315 @@ export default function BuyerDashboard() {
 
   if (!buyer) return null;
 
-  const selectedServices = buyer.services_csv?.split(",").map(s => s.trim()).filter(Boolean) || [];
-
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 p-4 md:p-8">
+      <div className="mx-auto max-w-7xl space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">{buyer.business_name}</h1>
-            <p className="text-muted-foreground">{buyer.city} • {buyer.email}</p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-4xl font-bold tracking-tight">{buyer.business_name}</h1>
+            <p className="text-lg text-muted-foreground">{buyer.city} • {buyer.email}</p>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
+          <Button variant="outline" onClick={handleLogout} size="lg">
             Sign out
           </Button>
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Last 7 days</CardDescription>
-              <CardTitle className="text-3xl">{stats?.count7d || 0}</CardTitle>
+        {/* KPI Stats Grid */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="bg-gradient-to-br from-card to-card/50 border-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 7 days</CardDescription>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Leads delivered</p>
+              {stats ? (
+                <>
+                  <CardTitle className="text-4xl font-bold">{stats.count7d}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">Leads delivered</p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-10 w-20 mb-1" />
+                  <Skeleton className="h-4 w-28" />
+                </>
+              )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Last 30 days</CardDescription>
-              <CardTitle className="text-3xl">{stats?.count30d || 0}</CardTitle>
+
+          <Card className="bg-gradient-to-br from-card to-card/50 border-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 30 days</CardDescription>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Leads delivered</p>
+              {stats ? (
+                <>
+                  <CardTitle className="text-4xl font-bold">{stats.count30d}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">Leads delivered</p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-10 w-20 mb-1" />
+                  <Skeleton className="h-4 w-28" />
+                </>
+              )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Last 7 days</CardDescription>
-              <CardTitle className="text-3xl">${stats?.spend7d.toFixed(2) || "0.00"}</CardTitle>
+
+          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 7 days</CardDescription>
+                <DollarSign className="h-4 w-4 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Total spend</p>
+              {stats ? (
+                <>
+                  <CardTitle className="text-4xl font-bold text-primary">${stats.spend7d.toFixed(2)}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">Total spend</p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-10 w-24 mb-1" />
+                  <Skeleton className="h-4 w-20" />
+                </>
+              )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Last 30 days</CardDescription>
-              <CardTitle className="text-3xl">${stats?.spend30d.toFixed(2) || "0.00"}</CardTitle>
+
+          <Card className="bg-gradient-to-br from-secondary/5 to-secondary/10 border-2 border-secondary/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 30 days</CardDescription>
+                <Package className="h-4 w-4 text-secondary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Total spend</p>
+              {stats ? (
+                <>
+                  <CardTitle className="text-4xl font-bold text-secondary">${stats.spend30d.toFixed(2)}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">Total spend</p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-10 w-24 mb-1" />
+                  <Skeleton className="h-4 w-20" />
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Status & Caps */}
-        <Card>
+        {/* Status & Capacity */}
+        <Card className="border-2">
           <CardHeader>
-            <CardTitle>Status & Capacity</CardTitle>
-            <CardDescription>Control when you receive leads</CardDescription>
+            <CardTitle className="text-2xl">Status & Capacity</CardTitle>
+            <CardDescription>Control when and how many leads you receive</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="status-switch">Active status</Label>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="status-switch" className="text-base font-medium">Active status</Label>
+                <p className="text-sm text-muted-foreground">
+                  {statusActive ? "You are currently receiving leads" : "Lead delivery is paused"}
+                </p>
+              </div>
               <Switch
                 id="status-switch"
-                checked={buyer.status === "active"}
+                checked={statusActive}
                 onCheckedChange={(checked) => {
-                  updateBuyerMutation.mutate({ status: checked ? "active" : "paused" });
+                  setStatusActive(checked);
+                  setHasUnsavedCapacity(true);
                 }}
+                disabled={updateCapacityMutation.isPending}
               />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="daily-cap">Daily cap (max: 50)</Label>
+            
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="daily-cap" className="text-base">Daily cap</Label>
+                  <p className="text-sm text-muted-foreground">Maximum leads per day (0-200)</p>
+                </div>
                 <Input
                   id="daily-cap"
                   type="number"
                   min="0"
-                  max="50"
-                  value={buyer.daily_cap}
+                  max="200"
+                  value={dailyCap}
                   onChange={(e) => {
-                    const value = Math.min(50, Math.max(0, parseInt(e.target.value) || 0));
-                    updateBuyerMutation.mutate({ daily_cap: value });
+                    const value = Math.min(200, Math.max(0, parseInt(e.target.value) || 0));
+                    setDailyCap(value);
+                    setHasUnsavedCapacity(true);
                   }}
+                  disabled={updateCapacityMutation.isPending}
+                  className="text-lg"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="shared-cap">Shared cap (max: 10)</Label>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="shared-cap" className="text-base">Shared cap</Label>
+                  <p className="text-sm text-muted-foreground">Max shared leads per lead (0-10)</p>
+                </div>
                 <Input
                   id="shared-cap"
                   type="number"
                   min="0"
                   max="10"
-                  value={buyer.shared_cap}
+                  value={sharedCap}
                   onChange={(e) => {
                     const value = Math.min(10, Math.max(0, parseInt(e.target.value) || 0));
-                    updateBuyerMutation.mutate({ shared_cap: value });
+                    setSharedCap(value);
+                    setHasUnsavedCapacity(true);
                   }}
+                  disabled={updateCapacityMutation.isPending}
+                  className="text-lg"
                 />
+              </div>
+            </div>
+
+            {hasUnsavedCapacity && (
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <p className="text-sm text-muted-foreground">You have unsaved changes</p>
+                <Button
+                  onClick={handleSaveCapacity}
+                  disabled={updateCapacityMutation.isPending}
+                  size="lg"
+                >
+                  {updateCapacityMutation.isPending ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Service Preferences */}
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-2xl">Service Preferences</CardTitle>
+            <CardDescription>
+              Select which services you want to receive leads for. You can choose from preset options or add custom services.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <ServiceMultiSelect
+              value={selectedServices}
+              onChange={(services) => {
+                setSelectedServices(services);
+                setHasUnsavedServices(true);
+              }}
+              disabled={updateServicesMutation.isPending}
+            />
+
+            {hasUnsavedServices && (
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <p className="text-sm text-muted-foreground">You have unsaved changes</p>
+                <Button
+                  onClick={handleSaveServices}
+                  disabled={updateServicesMutation.isPending}
+                  size="lg"
+                >
+                  {updateServicesMutation.isPending ? "Saving..." : "Save services"}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pricing (read-only) */}
+        <Card className="border-2 bg-gradient-to-br from-card to-accent/5">
+          <CardHeader>
+            <CardTitle className="text-2xl">Pricing</CardTitle>
+            <CardDescription>Your current pricing structure (managed by admin)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border bg-card p-4 space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Pricing mode</p>
+                <p className="text-2xl font-bold capitalize">{buyer.pricing_mode}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Shared lead</p>
+                <p className="text-2xl font-bold">${Number(buyer.price_shared).toFixed(2)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Exclusive lead</p>
+                <p className="text-2xl font-bold">${Number(buyer.price_exclusive).toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Service Preferences */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Service Preferences</CardTitle>
-            <CardDescription>Select the services you want to receive leads for</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {SERVICE_OPTIONS.map((service) => (
-                <div key={service} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={service}
-                    checked={selectedServices.includes(service)}
-                    onCheckedChange={(checked) => {
-                      let newServices = [...selectedServices];
-                      if (checked) {
-                        newServices.push(service);
-                      } else {
-                        newServices = newServices.filter(s => s !== service);
-                      }
-                      updateBuyerMutation.mutate({ services_csv: newServices.join(",") });
-                    }}
-                  />
-                  <Label htmlFor={service} className="cursor-pointer">
-                    {service}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pricing (read-only) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Pricing</CardTitle>
-            <CardDescription>Your current pricing structure</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Pricing mode:</span>
-              <span className="font-medium">{buyer.pricing_mode}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Shared lead price:</span>
-              <span className="font-medium">${Number(buyer.price_shared).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Exclusive lead price:</span>
-              <span className="font-medium">${Number(buyer.price_exclusive).toFixed(2)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Recent Deliveries */}
-        <Card>
+        <Card className="border-2">
           <CardHeader>
-            <CardTitle>Recent Deliveries</CardTitle>
+            <CardTitle className="text-2xl">Recent Deliveries</CardTitle>
             <CardDescription>Your last 20 lead deliveries</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Lead Name</TableHead>
-                  <TableHead>Charge</TableHead>
-                  <TableHead>Refunded</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentDeliveries?.map((delivery: any) => (
-                  <TableRow key={delivery.id}>
-                    <TableCell>{new Date(delivery.created_at).toLocaleDateString()}</TableCell>
-                    <TableCell>{delivery.leads?.name || "N/A"}</TableCell>
-                    <TableCell>${Number(delivery.charge_amount).toFixed(2)}</TableCell>
-                    <TableCell>{delivery.refunded ? "Yes" : "No"}</TableCell>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="font-semibold">Date</TableHead>
+                    <TableHead className="font-semibold">Lead Name</TableHead>
+                    <TableHead className="font-semibold">Charge</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
                   </TableRow>
-                ))}
-                {(!recentDeliveries || recentDeliveries.length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      No deliveries yet
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {recentDeliveries === undefined ? (
+                    // Loading state
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : recentDeliveries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-32 text-center">
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                          <Package className="h-8 w-8" />
+                          <p>No deliveries yet</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    recentDeliveries.map((delivery: any) => (
+                      <TableRow key={delivery.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">
+                          {new Date(delivery.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>{delivery.leads?.name || "N/A"}</TableCell>
+                        <TableCell className="font-semibold">
+                          ${Number(delivery.charge_amount).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          {delivery.refunded ? (
+                            <span className="inline-flex items-center rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                              Refunded
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                              Paid
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
