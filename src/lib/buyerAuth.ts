@@ -4,60 +4,35 @@ export async function getCurrentBuyer() {
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) {
-    console.log("[buyerAuth] No authenticated user");
     return null;
   }
 
-  console.log("[buyerAuth] Checking buyer access for user:", user.email);
-
   // First check if buyer_users mapping exists
-  const { data: buyerUser, error: buyerUserError } = await supabase
+  const { data: buyerUser } = await supabase
     .from("buyer_users")
     .select("buyer_id")
     .eq("id", user.id)
     .single();
 
-  if (buyerUserError && buyerUserError.code !== 'PGRST116') {
-    console.error("[buyerAuth] Error fetching buyer_users:", buyerUserError);
-  }
-
   if (buyerUser) {
-    console.log("[buyerAuth] Found existing buyer mapping:", buyerUser.buyer_id);
     // Fetch the buyer record
-    const { data: buyer, error: buyerError } = await supabase
+    const { data: buyer } = await supabase
       .from("buyers")
       .select("*")
       .eq("id", buyerUser.buyer_id)
       .single();
     
-    if (buyerError) {
-      console.error("[buyerAuth] Error fetching buyer:", buyerError);
-      return null;
-    }
-    
     return buyer;
   }
 
   // Auto-create mapping if buyer email matches
-  console.log("[buyerAuth] No mapping found, checking for buyer by email:", user.email);
-  const { data: buyer, error: buyerLookupError } = await supabase
+  const { data: buyer } = await supabase
     .from("buyers")
     .select("*")
     .eq("email", user.email)
     .single();
 
-  if (buyerLookupError) {
-    if (buyerLookupError.code === 'PGRST116') {
-      console.log("[buyerAuth] No buyer found with email:", user.email);
-    } else {
-      console.error("[buyerAuth] Error looking up buyer:", buyerLookupError);
-    }
-    return null;
-  }
-
   if (buyer) {
-    console.log("[buyerAuth] Found buyer, creating mapping for:", buyer.id);
-    
     // Create the buyer_users mapping
     const { error: mappingError } = await supabase
       .from("buyer_users")
@@ -67,8 +42,8 @@ export async function getCurrentBuyer() {
       });
     
     if (mappingError) {
-      console.error("[buyerAuth] Error creating buyer_users mapping:", mappingError);
-      return null;
+      console.error("Failed to create buyer mapping:", mappingError);
+      throw mappingError;
     }
     
     // Assign buyer role
@@ -80,14 +55,29 @@ export async function getCurrentBuyer() {
       });
     
     if (roleError) {
-      console.error("[buyerAuth] Error creating buyer role:", roleError);
-      return null;
+      console.error("Failed to create buyer role:", roleError);
+      throw roleError;
     }
     
-    console.log("[buyerAuth] Successfully created buyer mapping and role");
     return buyer;
   }
 
-  console.log("[buyerAuth] No matching buyer found");
   return null;
+}
+
+// New helper: check if user email matches any buyer (for auth guard)
+export async function canUserBecomeBuyer(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user || !user.email) {
+    return false;
+  }
+
+  const { data: buyer } = await supabase
+    .from("buyers")
+    .select("id")
+    .eq("email", user.email)
+    .single();
+
+  return !!buyer;
 }

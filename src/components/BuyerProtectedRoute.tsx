@@ -3,10 +3,11 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import { checkIsBuyer } from "@/lib/userRoles";
+import { canUserBecomeBuyer } from "@/lib/buyerAuth";
 
 export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [isBuyer, setIsBuyer] = useState<boolean>(false);
+  const [isBuyerOrCanBe, setIsBuyerOrCanBe] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,8 +16,10 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        const buyerStatus = await checkIsBuyer();
-        setIsBuyer(buyerStatus);
+        // Check if they ARE a buyer OR CAN BECOME one (email matches)
+        const isBuyer = await checkIsBuyer();
+        const canBeBuyer = !isBuyer ? await canUserBecomeBuyer() : false;
+        setIsBuyerOrCanBe(isBuyer || canBeBuyer);
       }
       
       setLoading(false);
@@ -30,10 +33,11 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
       setSession(session);
       
       if (session) {
-        const buyerStatus = await checkIsBuyer();
-        setIsBuyer(buyerStatus);
+        const isBuyer = await checkIsBuyer();
+        const canBeBuyer = !isBuyer ? await canUserBecomeBuyer() : false;
+        setIsBuyerOrCanBe(isBuyer || canBeBuyer);
       } else {
-        setIsBuyer(false);
+        setIsBuyerOrCanBe(false);
       }
     });
 
@@ -43,7 +47,7 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">Loading...</div>
+        <div className="text-center">Loading your buyer dashboard...</div>
       </div>
     );
   }
@@ -52,8 +56,9 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     return <Navigate to="/buyer/login" replace />;
   }
 
-  if (!isBuyer) {
-    return <Navigate to="/auth" replace />;
+  if (!isBuyerOrCanBe) {
+    // Not a buyer and email doesn't match any buyer
+    return <Navigate to="/buyer/login" replace />;
   }
 
   return <>{children}</>;

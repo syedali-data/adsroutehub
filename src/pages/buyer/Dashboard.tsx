@@ -26,9 +26,10 @@ export default function BuyerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: buyer, isLoading } = useQuery({
+  const { data: buyer, isLoading, error } = useQuery({
     queryKey: ["current-buyer"],
     queryFn: getCurrentBuyer,
+    retry: 2,
   });
 
   const { data: stats } = useQuery({
@@ -120,19 +121,31 @@ export default function BuyerDashboard() {
 
   useEffect(() => {
     if (!isLoading && !buyer) {
+      console.error("Buyer dashboard error:", error);
+      const errorMessage = error 
+        ? `Setup failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        : "No buyer account is associated with this email. Please contact support.";
+      
       toast({
         title: "Access denied",
-        description: "No buyer account is associated with this email. Please contact support.",
+        description: errorMessage,
         variant: "destructive",
       });
-      navigate("/buyer/login");
+      
+      // Give user time to see the error before redirecting
+      setTimeout(() => {
+        navigate("/buyer/login");
+      }, 3000);
     }
-  }, [buyer, isLoading, navigate, toast]);
+  }, [buyer, isLoading, error, navigate, toast]);
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">Loading...</div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Setting up your buyer dashboard...</p>
+        </div>
       </div>
     );
   }
