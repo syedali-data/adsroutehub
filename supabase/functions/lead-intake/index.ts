@@ -1,10 +1,24 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
+
+// Zod schema for input validation
+const LeadSchema = z.object({
+  campaign_slug: z.string().max(100).optional(),
+  name: z.string().trim().min(1, "Name is required").max(200, "Name too long"),
+  email: z.string().email("Invalid email format").max(255, "Email too long"),
+  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone format (use E.164 format)").max(20),
+  city: z.string().min(2, "City too short").max(100, "City too long"),
+  service_type: z.string().min(2, "Service type too short").max(100, "Service type too long"),
+  budget_raw: z.string().max(500, "Budget description too long").optional(),
+  notes: z.string().max(2000, "Notes too long").optional(),
+  exclusivity: z.enum(['shared', 'exclusive']).optional().default('shared'),
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -12,20 +26,39 @@ serve(async (req) => {
   }
 
   try {
+    // Validate API key
+    const apiKey = req.headers.get('x-api-key');
+    const validApiKey = Deno.env.get('LEAD_INTAKE_API_KEY');
+    
+    if (!apiKey || apiKey !== validApiKey) {
+      console.warn('Unauthorized lead intake attempt');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const payload = await req.json();
-    const { campaign_slug, name, email, phone, city, service_type, budget_raw, notes, exclusivity } = payload;
-
-    // Basic validation
-    if (!name || !email || !phone || !city || !service_type) {
+    const rawPayload = await req.json();
+    
+    // Validate and sanitize input
+    let payload;
+    try {
+      payload = LeadSchema.parse(rawPayload);
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ 
+          error: 'Invalid input', 
+          details: validationError instanceof z.ZodError ? validationError.errors : 'Validation failed'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const { campaign_slug, name, email, phone, city, service_type, budget_raw, notes, exclusivity } = payload;
 
     // Dedupe check - date-based hash for 24h window
     const today = new Date().toISOString().split('T')[0]; // "2025-11-07"
