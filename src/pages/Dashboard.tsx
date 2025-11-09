@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Users, Truck, DollarSign, TrendingUp, DollarSign as RefundIcon } from "lucide-react";
 import { TimeRangeFilter, TimeRange } from "@/components/dashboard/TimeRangeFilter";
 import { useDateRange } from "@/hooks/useDateRange";
@@ -16,17 +16,52 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { BuyerPerformanceTable } from "@/components/dashboard/BuyerPerformanceTable";
 import { CampaignBreakdown } from "@/components/dashboard/CampaignBreakdown";
 import { RefundHealthSummary } from "@/components/dashboard/RefundHealthSummary";
+import { toast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>("30days");
   const dateRange = useDateRange(timeRange);
 
-  const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs(dateRange);
-  const { data: leadsDeliveriesData, isLoading: chartLoading } = useLeadsDeliveriesOverTime(dateRange);
-  const { data: revenueData, isLoading: revenueLoading } = useRevenueOverTime(dateRange);
+  const { data: kpis, isLoading: kpisLoading, error: kpisError } = useDashboardKPIs(dateRange);
+  const { data: leadsDeliveriesData, isLoading: chartLoading, error: chartError } = useLeadsDeliveriesOverTime(dateRange);
+  const { data: revenueData, isLoading: revenueLoading, error: revenueError } = useRevenueOverTime(dateRange);
   const { data: buyerPerformance, isLoading: buyerLoading } = useBuyerPerformance(dateRange);
   const { data: campaignPerformance, isLoading: campaignLoading } = useCampaignPerformance(dateRange);
   const { data: refundHealth, isLoading: refundLoading } = useRefundHealth(dateRange);
+
+  // Handle errors with toast notifications
+  useEffect(() => {
+    if (kpisError) {
+      console.error("[Dashboard] KPI Error:", kpisError);
+      toast({
+        title: "Error loading dashboard metrics",
+        description: kpisError.message,
+        variant: "destructive",
+      });
+    }
+  }, [kpisError]);
+
+  useEffect(() => {
+    if (chartError) {
+      console.error("[Dashboard] Chart Error:", chartError);
+      toast({
+        title: "Error loading chart data",
+        description: chartError.message,
+        variant: "destructive",
+      });
+    }
+  }, [chartError]);
+
+  useEffect(() => {
+    if (revenueError) {
+      console.error("[Dashboard] Revenue Error:", revenueError);
+      toast({
+        title: "Error loading revenue data",
+        description: revenueError.message,
+        variant: "destructive",
+      });
+    }
+  }, [revenueError]);
 
   return (
     <div className="space-y-8">

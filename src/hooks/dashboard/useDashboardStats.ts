@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface DateRange {
   startDate: Date;
@@ -12,6 +13,8 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
   return useQuery({
     queryKey: ["dashboard-kpis", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
+      console.log("[Dashboard KPIs] Fetching data for range:", { startDate, endDate });
+      
       const [
         leadsRes,
         prevLeadsRes,
@@ -30,6 +33,15 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
         supabase.from("buyers").select("*", { count: "exact", head: true }).eq("status", "active"),
       ]);
 
+      // Check for errors in any query
+      if (leadsRes.error) throw new Error(`Leads query failed: ${leadsRes.error.message}`);
+      if (prevLeadsRes.error) throw new Error(`Previous leads query failed: ${prevLeadsRes.error.message}`);
+      if (deliveriesRes.error) throw new Error(`Deliveries query failed: ${deliveriesRes.error.message}`);
+      if (prevDeliveriesRes.error) throw new Error(`Previous deliveries query failed: ${prevDeliveriesRes.error.message}`);
+      if (revenueRes.error) throw new Error(`Revenue query failed: ${revenueRes.error.message}`);
+      if (prevRevenueRes.error) throw new Error(`Previous revenue query failed: ${prevRevenueRes.error.message}`);
+      if (buyersRes.error) throw new Error(`Buyers query failed: ${buyersRes.error.message}`);
+
       const grossRevenue = revenueRes.data?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
       const refundedAmount = revenueRes.data?.filter(d => d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
       const prevGrossRevenue = prevRevenueRes.data?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
@@ -38,6 +50,14 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
         if (previous === 0) return current > 0 ? 100 : 0;
         return ((current - previous) / previous) * 100;
       };
+
+      console.log("[Dashboard KPIs] Calculated metrics:", {
+        totalLeads: leadsRes.count,
+        deliveries: deliveriesRes.count,
+        grossRevenue,
+        refundedAmount,
+        netRevenue: grossRevenue - refundedAmount,
+      });
 
       return {
         totalLeads: leadsRes.count || 0,
@@ -58,10 +78,15 @@ export const useLeadsDeliveriesOverTime = ({ startDate, endDate }: { startDate: 
   return useQuery({
     queryKey: ["leads-deliveries-chart", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
+      console.log("[Leads/Deliveries Chart] Fetching data for range:", { startDate, endDate });
+      
       const [leadsRes, deliveriesRes] = await Promise.all([
         supabase.from("leads").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
         supabase.from("deliveries").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
       ]);
+
+      if (leadsRes.error) throw new Error(`Leads chart query failed: ${leadsRes.error.message}`);
+      if (deliveriesRes.error) throw new Error(`Deliveries chart query failed: ${deliveriesRes.error.message}`);
 
       const dataMap = new Map<string, { date: string; leads: number; deliveries: number }>();
       
@@ -79,7 +104,9 @@ export const useLeadsDeliveriesOverTime = ({ startDate, endDate }: { startDate: 
         dataMap.set(date, existing);
       });
 
-      return Array.from(dataMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      const result = Array.from(dataMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      console.log("[Leads/Deliveries Chart] Processed data points:", result.length);
+      return result;
     },
   });
 };
@@ -88,12 +115,16 @@ export const useRevenueOverTime = ({ startDate, endDate }: { startDate: Date; en
   return useQuery({
     queryKey: ["revenue-chart", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
+      console.log("[Revenue Chart] Fetching data for range:", { startDate, endDate });
+      
       const res = await supabase
         .from("deliveries")
         .select("created_at, charge_amount")
         .eq("refunded", false)
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString());
+
+      if (res.error) throw new Error(`Revenue chart query failed: ${res.error.message}`);
 
       const dataMap = new Map<string, { date: string; revenue: number }>();
 
@@ -104,7 +135,9 @@ export const useRevenueOverTime = ({ startDate, endDate }: { startDate: Date; en
         dataMap.set(date, existing);
       });
 
-      return Array.from(dataMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      const result = Array.from(dataMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      console.log("[Revenue Chart] Processed data points:", result.length);
+      return result;
     },
   });
 };
