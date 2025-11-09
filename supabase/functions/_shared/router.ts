@@ -116,18 +116,19 @@ export async function routeLeadInternal(
       ? 0 
       : (exclusivity === 'exclusive' ? buyer.price_exclusive : buyer.price_shared);
 
-    // Buyer passes all filters
+    // Buyer passes all filters - add as eligible candidate
+    // would_receive will be set to true only for final selected buyers
     candidates.push({
       buyer,
-      would_receive: true,
-      reason: 'Passes all caps and filters',
+      would_receive: false,
+      reason: 'Eligible (passes all caps and filters)',
       using_free_lead: usingFreeLead,
       calculated_charge_amount: chargeAmount,
     });
   }
 
   // Step 3: Select buyers based on response rate and exclusivity
-  const eligibleCandidates = candidates.filter(c => c.would_receive);
+  const eligibleCandidates = candidates.filter(c => c.reason === 'Eligible (passes all caps and filters)');
   
   // Sort by response_rate descending
   eligibleCandidates.sort((a, b) => b.buyer.response_rate - a.buyer.response_rate);
@@ -137,6 +138,22 @@ export async function routeLeadInternal(
   // For shared: max 3 buyers (configurable limit)
   const maxBuyers = exclusivity === 'exclusive' ? 1 : 3;
   const selected = eligibleCandidates.slice(0, maxBuyers);
+
+  // Mark selected buyers as would_receive = true and update their reasons
+  for (const candidate of selected) {
+    candidate.would_receive = true;
+    candidate.reason = 'Passes all caps and filters';
+  }
+
+  // Update reasons for non-selected eligible candidates
+  for (const candidate of eligibleCandidates) {
+    if (!selected.includes(candidate)) {
+      candidate.would_receive = false;
+      candidate.reason = exclusivity === 'exclusive' 
+        ? 'Not selected (exclusive routing chooses a single buyer)'
+        : 'Not selected (limited by shared lead cap or response rate ranking)';
+    }
+  }
 
   // Step 4: If not dry run, create deliveries and update buyers
   if (!dryRun && lead.id) {
