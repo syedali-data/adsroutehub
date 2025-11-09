@@ -82,19 +82,30 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     return () => subscription.unsubscribe();
   }, []);
 
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">Loading your buyer dashboard...</div>
+        <div className="text-center space-y-2">
+          <div className="text-lg">Setting up your buyer dashboard...</div>
+          {error && (
+            <div className="text-sm text-muted-foreground">
+              {error === "unexpected" && "An unexpected error occurred. Please try again."}
+              {error === "session-error" && "Session error. Please try logging in again."}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
   if (!session) {
+    console.log("[BuyerProtectedRoute] No session, redirecting to login");
     return <Navigate to="/buyer/login" replace />;
   }
 
-  if (!buyer) {
+  if (!buyer || error === "no-buyer") {
+    console.log("[BuyerProtectedRoute] No buyer found, showing Access Denied");
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <div className="text-center max-w-md space-y-4">
@@ -103,7 +114,10 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
             No buyer account is linked to this email ({session.user.email}). Please contact support.
           </p>
           <Button 
-            onClick={() => supabase.auth.signOut()} 
+            onClick={() => {
+              console.log("[BuyerProtectedRoute] Signing out");
+              supabase.auth.signOut();
+            }} 
             variant="outline"
           >
             Sign out
@@ -113,5 +127,6 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     );
   }
 
+  console.log("[BuyerProtectedRoute] Rendering buyer dashboard");
   return <>{children}</>;
 };
