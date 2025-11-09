@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { routeLeadInternal } from "../_shared/router.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -112,92 +113,35 @@ serve(async (req) => {
     const { data: settings } = await supabase.from('settings').select('*');
     const settingsMap = Object.fromEntries(settings?.map(s => [s.key, s.value]) || []);
 
-    if (settingsMap['USE_N8N_ROUTER'] === 'true') {
+    // Use n8n routing ONLY if explicitly enabled AND webhook URL is configured
+    const useN8nRouter = settingsMap['USE_N8N_ROUTER'] === 'true';
+    const n8nWebhookUrl = settingsMap['N8N_ROUTER_WEBHOOK_URL']?.trim();
+
+    if (useN8nRouter && n8nWebhookUrl) {
+      console.log('[Lead Intake] Using n8n routing');
       // Call n8n webhook
-      await fetch(settingsMap['N8N_ROUTER_WEBHOOK_URL'], {
+      await fetch(n8nWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lead_id: lead.id, ...lead }),
       });
     } else {
-      // Internal routing logic
-      // Internal routing logic - find eligible buyers
-      const { data: buyers } = await supabase
-        .from('buyers')
-        .select('*')
-        .eq('status', 'active')
-        .ilike('services_csv', `%${service_type}%`)
-        .eq('city', city.toLowerCase());
-
-      // Filter buyers under daily cap
-      let eligibleBuyers = buyers?.filter(b => b.daily_sent < b.daily_cap) || [];
-
-      // For shared leads, also enforce shared_cap per lead
-      if (exclusivity === 'shared' && eligibleBuyers.length > 0) {
-        const buyerIds = eligibleBuyers.map(b => b.id);
-        
-        // Count existing deliveries per buyer for this lead
-        const { data: existingDeliveries } = await supabase
-          .from('deliveries')
-          .select('buyer_id')
-          .eq('lead_id', lead.id)
-          .in('buyer_id', buyerIds);
-        
-        const deliveryCountByBuyer: Record<string, number> = {};
-        existingDeliveries?.forEach(d => {
-          deliveryCountByBuyer[d.buyer_id] = (deliveryCountByBuyer[d.buyer_id] || 0) + 1;
-        });
-        
-        // Filter out buyers who have reached shared_cap for this lead
-        eligibleBuyers = eligibleBuyers.filter(b => {
-          const deliveryCount = deliveryCountByBuyer[b.id] || 0;
-          return deliveryCount < b.shared_cap;
-        });
-      }
-
-      // Sort by response_rate and take top N
-      const selectedBuyers = eligibleBuyers
-        .sort((a, b) => b.response_rate - a.response_rate)
-        .slice(0, exclusivity === 'exclusive' ? 1 : 3);
-
-      // Create deliveries
-      const createdDeliveries: Array<{ buyer: any; chargeAmount: number }> = [];
+      // Internal routing (default behavior)
+      console.log('[Lead Intake] Using internal routing');
       
-      for (const buyer of selectedBuyers) {
-        // Determine charge amount based on free leads
-        let chargeAmount: number;
-        let newFreeLeadsLeft = buyer.free_leads_left;
-        
-        if (buyer.free_leads_left > 0) {
-          // Use free lead credit
-          chargeAmount = 0;
-          newFreeLeadsLeft = buyer.free_leads_left - 1;
-        } else {
-          // Normal pricing
-          chargeAmount = exclusivity === 'exclusive' ? buyer.price_exclusive : buyer.price_shared;
-        }
-        
-        // Insert delivery
-        await supabase.from('deliveries').insert({
-          lead_id: lead.id,
-          buyer_id: buyer.id,
-          campaign_id: campaign?.id,
-          charge_amount: chargeAmount,
-          source: 'internal',
-        });
+      // Route the lead using shared routing logic
+      const routingResult = await routeLeadInternal(supabase, {
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        city: city.toLowerCase(),
+        service_type: service_type.toLowerCase(),
+        exclusivity: exclusivity || 'shared',
+        campaign_id: campaign?.id,
+      }, false);
 
-        // Update buyer: increment daily_sent and decrement free_leads_left
-        await supabase
-          .from('buyers')
-          .update({ 
-            daily_sent: buyer.daily_sent + 1,
-            free_leads_left: newFreeLeadsLeft
-          })
-          .eq('id', buyer.id);
-        
-        // Track for SMS sending
-        createdDeliveries.push({ buyer, chargeAmount });
-      }
+      console.log(`[Lead Intake] Routed to ${routingResult.selected.length} buyer(s)`);
 
       // Send SMS notifications after all deliveries are created
       const smsEnabled = settingsMap['ENABLE_SMS_DELIVERY'] === 'true';
@@ -208,7 +152,7 @@ serve(async (req) => {
       if (smsEnabled && twilioSid && twilioToken && twilioFrom) {
         console.log('[Lead Intake] SMS delivery enabled, processing notifications...');
         
-        for (const { buyer, chargeAmount } of createdDeliveries) {
+        for (const { buyer, calculated_charge_amount } of routingResult.selected) {
           // Check if buyer has SMS enabled and phone configured
           if (!buyer.sms_enabled) {
             console.log(`[Lead Intake] SMS disabled for buyer ${buyer.id}, skipping`);
@@ -221,7 +165,7 @@ serve(async (req) => {
           }
 
           // Construct SMS message (keep under 160 chars)
-          const smsBody = `New lead: ${lead.name}, ${lead.city}, ${lead.service_type}. Phone: ${lead.phone}. Price: $${chargeAmount}.`;
+          const smsBody = `New lead: ${lead.name}, ${lead.city}, ${lead.service_type}. Phone: ${lead.phone}. Price: $${calculated_charge_amount}.`;
 
           try {
             // Send SMS via Twilio REST API

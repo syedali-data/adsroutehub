@@ -18,6 +18,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import BuyerLogin from "./pages/buyer/Login";
 import BuyerDashboard from "./pages/buyer/Dashboard";
+import RoutingTest from "./pages/admin/RoutingTest";
 
 const queryClient = new QueryClient();
 
@@ -110,6 +111,14 @@ const App = () => (
                 <DashboardLayout>
                   <Settings />
                 </DashboardLayout>
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/routing-test"
+            element={
+              <AdminProtectedRoute>
+                <RoutingTest />
               </AdminProtectedRoute>
             }
           />

@@ -10,6 +10,7 @@ import {
   Tag,
   Settings,
   LogOut,
+  FlaskConical,
 } from "lucide-react";
 import {
   Sidebar,
@@ -34,6 +35,7 @@ const menuItems = [
   { title: "Deliveries", url: "/admin/deliveries", icon: Truck },
   { title: "Refunds", url: "/admin/refunds", icon: AlertCircle },
   { title: "Campaigns", url: "/admin/campaigns", icon: Tag },
+  { title: "Routing Test", url: "/admin/routing-test", icon: FlaskConical },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
