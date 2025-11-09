@@ -384,7 +384,7 @@ const Settings = () => {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Send a test SMS to verify your Twilio configuration
+              <strong>Important:</strong> Save your Twilio credentials above before testing SMS delivery
             </p>
           </div>
         </CardContent>
