@@ -157,11 +157,13 @@ export async function routeLeadInternal(
 
   // Step 4: If not dry run, create deliveries and update buyers
   if (!dryRun && lead.id) {
+    console.log(`[Router] Creating ${selected.length} deliveries for lead ${lead.id}`);
+    
     for (const candidate of selected) {
       const { buyer, calculated_charge_amount, using_free_lead } = candidate;
 
       // Insert delivery with claim_status defaulting to 'new'
-      await supabase.from('deliveries').insert({
+      const { data: delivery, error: deliveryError } = await supabase.from('deliveries').insert({
         lead_id: lead.id,
         buyer_id: buyer.id,
         campaign_id: lead.campaign_id,
@@ -170,17 +172,33 @@ export async function routeLeadInternal(
         claim_status: 'new',
         claimed: false,
         won: null,
-      });
+      }).select().single();
+
+      if (deliveryError) {
+        console.error(`[Router] Failed to create delivery for buyer ${buyer.id}:`, deliveryError);
+        throw new Error(`Failed to create delivery for buyer ${buyer.business_name}: ${deliveryError.message}`);
+      }
+
+      console.log(`[Router] Created delivery ${delivery.id} for buyer ${buyer.business_name} (${buyer.id}), charge: $${calculated_charge_amount}, free: ${using_free_lead}`);
 
       // Update buyer: increment daily_sent and decrement free_leads_left if used
-      await supabase
+      const { error: buyerError } = await supabase
         .from('buyers')
         .update({
           daily_sent: buyer.daily_sent + 1,
           free_leads_left: using_free_lead ? buyer.free_leads_left - 1 : buyer.free_leads_left,
         })
         .eq('id', buyer.id);
+
+      if (buyerError) {
+        console.error(`[Router] Failed to update buyer ${buyer.id}:`, buyerError);
+        throw new Error(`Failed to update buyer ${buyer.business_name}: ${buyerError.message}`);
+      }
+
+      console.log(`[Router] Updated buyer ${buyer.business_name}: daily_sent=${buyer.daily_sent + 1}, free_leads_left=${using_free_lead ? buyer.free_leads_left - 1 : buyer.free_leads_left}`);
     }
+    
+    console.log(`[Router] Successfully created ${selected.length} deliveries for lead ${lead.id}`);
   }
 
   return {

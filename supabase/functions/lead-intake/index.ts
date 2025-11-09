@@ -127,7 +127,12 @@ serve(async (req) => {
       });
     } else {
       // Internal routing (default behavior)
-      console.log('[Lead Intake] Using internal routing');
+      console.log('[Lead Intake] Using internal routing for lead:', {
+        lead_id: lead.id,
+        city: city.toLowerCase(),
+        service_type: service_type.toLowerCase(),
+        exclusivity: exclusivity || 'shared',
+      });
       
       // Route the lead using shared routing logic
       const routingResult = await routeLeadInternal(supabase, {
@@ -141,7 +146,16 @@ serve(async (req) => {
         campaign_id: campaign?.id,
       }, false);
 
-      console.log(`[Lead Intake] Routed to ${routingResult.selected.length} buyer(s)`);
+      console.log(`[Lead Intake] Routing complete: ${routingResult.selected.length} of ${routingResult.candidates.length} buyers selected`);
+      
+      if (routingResult.selected.length === 0) {
+        console.warn('[Lead Intake] No buyers selected for lead. Candidates:', 
+          routingResult.candidates.map(c => ({
+            buyer: c.buyer.business_name,
+            reason: c.reason
+          }))
+        );
+      }
 
       // Send SMS notifications after all deliveries are created
       const smsEnabled = settingsMap['ENABLE_SMS_DELIVERY'] === 'true';
@@ -206,8 +220,44 @@ serve(async (req) => {
       }
     }
 
+    // Build response with delivery details
+    let response: any = { 
+      success: true, 
+      lead_id: lead.id,
+      status: 'created'
+    };
+
+    // If we used internal routing, include routing results
+    if (!useN8nRouter || !n8nWebhookUrl) {
+      // We need to access the routing result from earlier
+      // Re-fetch deliveries to confirm what was created
+      const { data: deliveries } = await supabase
+        .from('deliveries')
+        .select(`
+          id,
+          buyer_id,
+          charge_amount,
+          buyers (
+            business_name,
+            email
+          )
+        `)
+        .eq('lead_id', lead.id);
+
+      response.status = 'routed';
+      response.deliveries_created = deliveries?.map((d: any) => ({
+        delivery_id: d.id,
+        buyer_id: d.buyer_id,
+        business_name: Array.isArray(d.buyers) && d.buyers.length > 0 ? d.buyers[0].business_name : 'Unknown',
+        charge_amount: d.charge_amount,
+        used_free_lead: d.charge_amount === 0,
+      })) || [];
+      
+      console.log(`[Lead Intake] Response: ${response.deliveries_created.length} deliveries created for lead ${lead.id}`);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, lead_id: lead.id }),
+      JSON.stringify(response),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
