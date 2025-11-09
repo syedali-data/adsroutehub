@@ -26,18 +26,32 @@ const Buyers = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: buyers, isLoading } = useQuery({
+  const { data: buyers, isLoading, error: queryError } = useQuery({
     queryKey: ["buyers"],
     queryFn: async () => {
+      console.log("[Buyers] Fetching buyers list...");
       const { data, error } = await supabase
         .from("buyers")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[Buyers] Error fetching buyers:", error);
+        throw error;
+      }
+      console.log("[Buyers] Successfully fetched buyers:", data?.length);
       return data;
     },
   });
+
+  // Show error toast when query fails
+  if (queryError) {
+    toast({
+      title: "Error loading buyers",
+      description: queryError.message || "Failed to fetch buyers list. Check console for details.",
+      variant: "destructive",
+    });
+  }
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "active" | "paused" | "test" }) => {
@@ -117,6 +131,12 @@ const Buyers = () => {
               <TableRow>
                 <TableCell colSpan={9} className="text-center">
                   Loading...
+                </TableCell>
+              </TableRow>
+            ) : queryError ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-destructive">
+                  Error loading buyers. Please check console or contact support.
                 </TableCell>
               </TableRow>
             ) : buyers?.length === 0 ? (

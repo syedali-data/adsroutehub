@@ -71,6 +71,7 @@ export function AddBuyerDialog() {
 
   const mutation = useMutation({
     mutationFn: async (data: BuyerFormData) => {
+      console.log("[AddBuyerDialog] Inserting buyer:", data);
       const { error } = await supabase.from("buyers").insert({
         business_name: data.business_name,
         external_code: data.external_code || null,
@@ -87,15 +88,21 @@ export function AddBuyerDialog() {
         status: data.status,
         daily_sent: 0,
       });
-      if (error) throw error;
+      if (error) {
+        console.error("[AddBuyerDialog] Error inserting buyer:", error);
+        throw error;
+      }
+      console.log("[AddBuyerDialog] Buyer inserted successfully");
     },
     onSuccess: () => {
+      console.log("[AddBuyerDialog] Mutation success, invalidating queries");
       queryClient.invalidateQueries({ queryKey: ["buyers"] });
       toast.success("Buyer added successfully!");
       setOpen(false);
       form.reset();
     },
     onError: (error: Error) => {
+      console.error("[AddBuyerDialog] Mutation error:", error);
       toast.error("Failed to add buyer: " + error.message);
     },
   });
