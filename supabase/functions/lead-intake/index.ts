@@ -120,6 +120,7 @@ serve(async (req) => {
         body: JSON.stringify({ lead_id: lead.id, ...lead }),
       });
     } else {
+      // Internal routing logic
       // Internal routing logic - find eligible buyers
       const { data: buyers } = await supabase
         .from('buyers')
@@ -160,6 +161,8 @@ serve(async (req) => {
         .slice(0, exclusivity === 'exclusive' ? 1 : 3);
 
       // Create deliveries
+      const createdDeliveries: Array<{ buyer: any; chargeAmount: number }> = [];
+      
       for (const buyer of selectedBuyers) {
         // Determine charge amount based on free leads
         let chargeAmount: number;
@@ -191,6 +194,71 @@ serve(async (req) => {
             free_leads_left: newFreeLeadsLeft
           })
           .eq('id', buyer.id);
+        
+        // Track for SMS sending
+        createdDeliveries.push({ buyer, chargeAmount });
+      }
+
+      // Send SMS notifications after all deliveries are created
+      const smsEnabled = settingsMap['ENABLE_SMS_DELIVERY'] === 'true';
+      const twilioSid = settingsMap['TWILIO_ACCOUNT_SID'];
+      const twilioToken = settingsMap['TWILIO_AUTH_TOKEN'];
+      const twilioFrom = settingsMap['TWILIO_FROM_NUMBER'];
+
+      if (smsEnabled && twilioSid && twilioToken && twilioFrom) {
+        console.log('[Lead Intake] SMS delivery enabled, processing notifications...');
+        
+        for (const { buyer, chargeAmount } of createdDeliveries) {
+          // Check if buyer has SMS enabled and phone configured
+          if (!buyer.sms_enabled) {
+            console.log(`[Lead Intake] SMS disabled for buyer ${buyer.id}, skipping`);
+            continue;
+          }
+          
+          if (!buyer.sms_phone || buyer.sms_phone.trim() === '') {
+            console.log(`[Lead Intake] No SMS phone configured for buyer ${buyer.id}, skipping`);
+            continue;
+          }
+
+          // Construct SMS message (keep under 160 chars)
+          const smsBody = `New lead: ${lead.name}, ${lead.city}, ${lead.service_type}. Phone: ${lead.phone}. Price: $${chargeAmount}.`;
+
+          try {
+            // Send SMS via Twilio REST API
+            const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
+            const authHeader = 'Basic ' + btoa(`${twilioSid}:${twilioToken}`);
+            
+            const formBody = new URLSearchParams({
+              To: buyer.sms_phone,
+              From: twilioFrom,
+              Body: smsBody,
+            });
+
+            const smsResponse = await fetch(twilioUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: formBody.toString(),
+            });
+
+            if (!smsResponse.ok) {
+              const errorText = await smsResponse.text();
+              console.error(`[Lead Intake] Twilio SMS error for buyer ${buyer.id}:`, smsResponse.status, errorText);
+            } else {
+              console.log(`[Lead Intake] SMS sent successfully to buyer ${buyer.id} at ${buyer.sms_phone}`);
+            }
+          } catch (smsError) {
+            console.error(`[Lead Intake] Exception sending SMS to buyer ${buyer.id}:`, smsError);
+          }
+        }
+      } else {
+        if (!smsEnabled) {
+          console.log('[Lead Intake] SMS delivery globally disabled');
+        } else {
+          console.log('[Lead Intake] Twilio credentials not fully configured, skipping SMS');
+        }
       }
     }
 

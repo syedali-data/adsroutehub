@@ -78,6 +78,8 @@ export type Database = {
           response_rate: number
           services_csv: string
           shared_cap: number
+          sms_enabled: boolean
+          sms_phone: string | null
           status: Database["public"]["Enums"]["buyer_status"]
         }
         Insert: {
@@ -96,6 +98,8 @@ export type Database = {
           response_rate?: number
           services_csv: string
           shared_cap?: number
+          sms_enabled?: boolean
+          sms_phone?: string | null
           status?: Database["public"]["Enums"]["buyer_status"]
         }
         Update: {
@@ -114,6 +118,8 @@ export type Database = {
           response_rate?: number
           services_csv?: string
           shared_cap?: number
+          sms_enabled?: boolean
+          sms_phone?: string | null
           status?: Database["public"]["Enums"]["buyer_status"]
         }
         Relationships: []

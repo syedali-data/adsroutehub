@@ -27,6 +27,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 
 const buyerSchema = z.object({
   business_name: z.string().min(3, "Business name must be at least 3 characters").max(100),
@@ -42,6 +43,24 @@ const buyerSchema = z.object({
   free_leads_left: z.coerce.number().min(0, "Must be 0 or greater"),
   response_rate: z.coerce.number().min(0).max(1, "Response rate must be between 0 and 1"),
   status: z.enum(["active", "paused", "test"]),
+  sms_enabled: z.boolean().default(false),
+  sms_phone: z.string().optional(),
+}).refine((data) => {
+  if (data.sms_enabled && (!data.sms_phone || data.sms_phone.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "SMS phone number is required when SMS delivery is enabled",
+  path: ["sms_phone"],
+}).refine((data) => {
+  if (data.sms_phone && data.sms_phone.trim() !== "") {
+    return /^\+[1-9]\d{1,14}$/.test(data.sms_phone.trim());
+  }
+  return true;
+}, {
+  message: "Phone number must be in E.164 format (e.g., +15551234567)",
+  path: ["sms_phone"],
 });
 
 type BuyerFormData = z.infer<typeof buyerSchema>;
@@ -66,6 +85,8 @@ export function AddBuyerDialog() {
       free_leads_left: 0,
       response_rate: 1.0,
       status: "active",
+      sms_enabled: false,
+      sms_phone: "",
     },
   });
 
@@ -87,6 +108,8 @@ export function AddBuyerDialog() {
         response_rate: data.response_rate,
         status: data.status,
         daily_sent: 0,
+        sms_enabled: data.sms_enabled,
+        sms_phone: data.sms_phone?.trim() || null,
       });
       if (error) {
         console.error("[AddBuyerDialog] Error inserting buyer:", error);
@@ -357,6 +380,52 @@ export function AddBuyerDialog() {
                           </div>
                         </RadioGroup>
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-semibold text-sm">SMS Delivery</h3>
+                
+                <FormField
+                  control={form.control}
+                  name="sms_enabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Send SMS for new leads</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          Buyer will receive SMS notifications when matched to leads
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="sms_phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SMS Phone Number</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="+15551234567" 
+                          disabled={!form.watch("sms_enabled")}
+                        />
+                      </FormControl>
+                      <div className="text-xs text-muted-foreground">
+                        E.164 format required (e.g., +15551234567)
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
