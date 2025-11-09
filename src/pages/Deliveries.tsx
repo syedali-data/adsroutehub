@@ -48,6 +48,7 @@ const Deliveries = () => {
   async function updateClaimLocally(
     id: string,
     updates: {
+      claim_status?: 'new' | 'contacted' | 'won' | 'lost';
       claimed?: boolean;
       won?: boolean | null;
       contacted_at?: string | null;
@@ -65,6 +66,7 @@ const Deliveries = () => {
   async function sendClaimToN8n(
     id: string,
     updates: {
+      claim_status?: 'new' | 'contacted' | 'won' | 'lost';
       claimed?: boolean;
       won?: boolean | null;
       contacted_at?: string | null;
@@ -88,6 +90,7 @@ const Deliveries = () => {
       buyer_id: data.buyers?.id,
       lead_id: data.leads?.id,
       charge_amount: data.charge_amount,
+      claim_status: updates.claim_status ?? data.claim_status,
       claimed: updates.claimed ?? data.claimed,
       won: updates.won ?? data.won,
       contacted_at: updates.contacted_at ?? data.contacted_at,
@@ -115,6 +118,7 @@ const Deliveries = () => {
     }: {
       id: string;
       updates: {
+        claim_status?: 'new' | 'contacted' | 'won' | 'lost';
         claimed?: boolean;
         won?: boolean | null;
         contacted_at?: string | null;
@@ -151,6 +155,7 @@ const Deliveries = () => {
     updateClaim.mutate({
       id: deliveryId,
       updates: {
+        claim_status: 'contacted',
         claimed: true,
         contacted_at: new Date().toISOString(),
       },
@@ -163,6 +168,7 @@ const Deliveries = () => {
     updateClaim.mutate({
       id: claimDialog.deliveryId,
       updates: {
+        claim_status: claimDialog.type,
         claimed: true,
         won: claimDialog.type === "won",
         closed_at: new Date().toISOString(),
@@ -175,16 +181,17 @@ const Deliveries = () => {
   };
 
   const getClaimStatusBadge = (delivery: any) => {
-    if (delivery.won === true) {
-      return <Badge className="bg-green-600">Won</Badge>;
+    switch (delivery.claim_status) {
+      case 'won':
+        return <Badge className="bg-green-600">Won</Badge>;
+      case 'lost':
+        return <Badge variant="destructive">Lost</Badge>;
+      case 'contacted':
+        return <Badge variant="secondary">Contacted</Badge>;
+      case 'new':
+      default:
+        return <Badge variant="outline">New</Badge>;
     }
-    if (delivery.won === false) {
-      return <Badge variant="destructive">Lost</Badge>;
-    }
-    if (delivery.claimed) {
-      return <Badge variant="secondary">Contacted - Pending</Badge>;
-    }
-    return <Badge variant="outline">Not Contacted</Badge>;
   };
 
   return (
@@ -241,7 +248,7 @@ const Deliveries = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {!delivery.claimed && (
+                      {delivery.claim_status === 'new' && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -252,7 +259,7 @@ const Deliveries = () => {
                           <Phone className="h-3 w-3" />
                         </Button>
                       )}
-                      {delivery.claimed && delivery.won === null && (
+                      {delivery.claim_status === 'contacted' && (
                         <>
                           <Button
                             size="sm"

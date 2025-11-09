@@ -160,6 +160,7 @@ export type Database = {
           campaign_id: string | null
           channel: Database["public"]["Enums"]["delivery_channel"]
           charge_amount: number
+          claim_status: Database["public"]["Enums"]["claim_status"]
           claimed: boolean
           closed_at: string | null
           contacted_at: string | null
@@ -179,6 +180,7 @@ export type Database = {
           campaign_id?: string | null
           channel?: Database["public"]["Enums"]["delivery_channel"]
           charge_amount?: number
+          claim_status?: Database["public"]["Enums"]["claim_status"]
           claimed?: boolean
           closed_at?: string | null
           contacted_at?: string | null
@@ -191,13 +193,14 @@ export type Database = {
           refund_ts?: string | null
           refunded?: boolean
           source?: string
-          won?: boolean
+          won: boolean
         }
         Update: {
           buyer_id?: string | null
           campaign_id?: string | null
           channel?: Database["public"]["Enums"]["delivery_channel"]
           charge_amount?: number
+          claim_status?: Database["public"]["Enums"]["claim_status"]
           claimed?: boolean
           closed_at?: string | null
           contacted_at?: string | null
@@ -573,6 +576,7 @@ export type Database = {
       app_role: "admin" | "buyer"
       buyer_status: "active" | "paused" | "test"
       campaign_status: "active" | "paused"
+      claim_status: "new" | "contacted" | "won" | "lost"
       delivery_channel: "email" | "api" | "sms"
       lead_status:
         | "new"
@@ -713,6 +717,7 @@ export const Constants = {
       app_role: ["admin", "buyer"],
       buyer_status: ["active", "paused", "test"],
       campaign_status: ["active", "paused"],
+      claim_status: ["new", "contacted", "won", "lost"],
       delivery_channel: ["email", "api", "sms"],
       lead_status: [
         "new",

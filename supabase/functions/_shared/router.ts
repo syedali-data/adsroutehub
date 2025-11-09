@@ -160,13 +160,16 @@ export async function routeLeadInternal(
     for (const candidate of selected) {
       const { buyer, calculated_charge_amount, using_free_lead } = candidate;
 
-      // Insert delivery
+      // Insert delivery with claim_status defaulting to 'new'
       await supabase.from('deliveries').insert({
         lead_id: lead.id,
         buyer_id: buyer.id,
         campaign_id: lead.campaign_id,
         charge_amount: calculated_charge_amount,
         source: 'internal',
+        claim_status: 'new',
+        claimed: false,
+        won: null,
       });
 
       // Update buyer: increment daily_sent and decrement free_leads_left if used
