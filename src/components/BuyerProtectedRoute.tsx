@@ -9,19 +9,40 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
   const [session, setSession] = useState<Session | null>(null);
   const [buyer, setBuyer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      
-      if (session) {
-        // getCurrentBuyer will auto-create mapping and role if buyer email matches
-        const buyerData = await getCurrentBuyer();
-        setBuyer(buyerData);
+      try {
+        console.log("[BuyerProtectedRoute] Checking auth...");
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error("[BuyerProtectedRoute] Error getting session:", sessionError);
+          setError("session-error");
+          return;
+        }
+        
+        console.log("[BuyerProtectedRoute] Session:", session ? "exists" : "none");
+        setSession(session);
+        
+        if (session) {
+          console.log("[BuyerProtectedRoute] Fetching buyer data...");
+          const buyerData = await getCurrentBuyer();
+          console.log("[BuyerProtectedRoute] Buyer data:", buyerData ? "found" : "not found");
+          setBuyer(buyerData);
+          
+          if (!buyerData) {
+            setError("no-buyer");
+          }
+        }
+      } catch (e) {
+        console.error("[BuyerProtectedRoute] Unexpected error in checkAuth:", e);
+        setError("unexpected");
+      } finally {
+        console.log("[BuyerProtectedRoute] Setting loading to false");
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     checkAuth();
@@ -29,16 +50,33 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
+      console.log("[BuyerProtectedRoute] Auth state changed, event:", event);
       
-      if (session) {
-        const buyerData = await getCurrentBuyer();
-        setBuyer(buyerData);
-      } else {
-        setBuyer(null);
+      try {
+        setSession(session);
+        
+        if (session) {
+          console.log("[BuyerProtectedRoute] Session exists, fetching buyer...");
+          const buyerData = await getCurrentBuyer();
+          console.log("[BuyerProtectedRoute] Buyer data from auth change:", buyerData ? "found" : "not found");
+          setBuyer(buyerData);
+          
+          if (!buyerData) {
+            setError("no-buyer");
+          } else {
+            setError(null);
+          }
+        } else {
+          console.log("[BuyerProtectedRoute] No session, clearing buyer");
+          setBuyer(null);
+          setError(null);
+        }
+      } catch (e) {
+        console.error("[BuyerProtectedRoute] Error in auth state change:", e);
+        setError("unexpected");
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
