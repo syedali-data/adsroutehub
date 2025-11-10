@@ -30,36 +30,57 @@ const Buyers = () => {
     queryKey: ["buyers"],
     queryFn: async () => {
       console.log("[Buyers] Fetching buyers list...");
-      const { data, error } = await supabase
-        .from("buyers")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("buyers")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("[Buyers] Error fetching buyers:", error);
-        throw error;
+        if (error) {
+          console.error("[Buyers] Error fetching buyers:", error);
+          // Check for auth errors
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+        console.log("[Buyers] Successfully fetched buyers:", data?.length);
+        return data;
+      } catch (err) {
+        console.error("[Buyers] Query failed:", err);
+        throw err;
       }
-      console.log("[Buyers] Successfully fetched buyers:", data?.length);
-      return data;
     },
+    retry: 1,
+    retryDelay: 1000,
   });
 
   // Show error toast when query fails
   if (queryError) {
     toast({
       title: "Error loading buyers",
-      description: queryError.message || "Failed to fetch buyers list. Check console for details.",
+      description: queryError instanceof Error ? queryError.message : "Failed to fetch buyers list. Please reload the page.",
       variant: "destructive",
     });
   }
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "active" | "paused" | "test" }) => {
-      const { error } = await supabase
-        .from("buyers")
-        .update({ status })
-        .eq("id", id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("buyers")
+          .update({ status })
+          .eq("id", id);
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+      } catch (err) {
+        console.error("[Buyers] Update status failed:", err);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["buyers"] });
@@ -68,7 +89,7 @@ const Buyers = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update status.",
+        description: error.message || "Failed to update status. Please reload the page.",
         variant: "destructive",
       });
     },
@@ -76,8 +97,18 @@ const Buyers = () => {
 
   const deleteBuyer = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("buyers").delete().eq("id", id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase.from("buyers").delete().eq("id", id);
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+      } catch (err) {
+        console.error("[Buyers] Delete failed:", err);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["buyers"] });
@@ -86,7 +117,7 @@ const Buyers = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Cannot delete buyer with linked deliveries. Please archive instead.",
+        description: error.message || "Cannot delete buyer with linked deliveries. Please reload the page if session expired.",
         variant: "destructive",
       });
     },

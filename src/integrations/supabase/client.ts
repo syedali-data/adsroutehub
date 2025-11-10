@@ -13,5 +13,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+  }
+});
+
+// Add global error handler for auth issues
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED') {
+    console.log('[Supabase] Token refreshed successfully');
+  } else if (event === 'SIGNED_OUT') {
+    console.log('[Supabase] User signed out');
   }
 });

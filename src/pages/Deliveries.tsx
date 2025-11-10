@@ -28,23 +28,44 @@ const Deliveries = () => {
     deliveryId: string | null;
   }>({ open: false, type: "won", deliveryId: null });
 
-  const { data: deliveries, isLoading } = useQuery({
+  const { data: deliveries, isLoading, error: deliveriesError } = useQuery({
     queryKey: ["deliveries"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("deliveries")
-        .select(`
-          *,
-          leads(id, name, email),
-          buyers(id, business_name),
-          campaigns(name)
-        `)
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("deliveries")
+          .select(`
+            *,
+            leads(id, name, email),
+            buyers(id, business_name),
+            campaigns(name)
+          `)
+          .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+        return data;
+      } catch (err) {
+        console.error("[Deliveries] Query failed:", err);
+        throw err;
+      }
     },
+    retry: 1,
+    retryDelay: 1000,
   });
+
+  // Show error toast when query fails
+  if (deliveriesError) {
+    toast({
+      title: "Error loading deliveries",
+      description: deliveriesError instanceof Error ? deliveriesError.message : "Failed to fetch deliveries. Please reload the page.",
+      variant: "destructive",
+    });
+  }
 
   // Helper to update claim locally
   async function updateClaimLocally(
@@ -60,8 +81,18 @@ const Deliveries = () => {
       refunded?: boolean;
     }
   ) {
-    const { error } = await supabase.from("deliveries").update(updates).eq("id", id);
-    if (error) throw error;
+    try {
+      const { error } = await supabase.from("deliveries").update(updates).eq("id", id);
+      if (error) {
+        if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+          throw new Error('Session expired. Please reload the page and sign in again.');
+        }
+        throw error;
+      }
+    } catch (err) {
+      console.error("[Deliveries] Update claim failed:", err);
+      throw err;
+    }
   }
 
   // Helper to send claim to n8n
@@ -130,14 +161,19 @@ const Deliveries = () => {
         refunded?: boolean;
       };
     }) => {
-      const settingsMap = await getSettingsMap(supabase);
-      const useN8nClaims = settingsMap["USE_N8N_CLAIMS"] === "true";
-      const webhookUrl = settingsMap["N8N_CLAIM_WEBHOOK_URL"];
+      try {
+        const settingsMap = await getSettingsMap(supabase);
+        const useN8nClaims = settingsMap["USE_N8N_CLAIMS"] === "true";
+        const webhookUrl = settingsMap["N8N_CLAIM_WEBHOOK_URL"];
 
-      if (useN8nClaims && webhookUrl) {
-        await sendClaimToN8n(id, updates, webhookUrl);
-      } else {
-        await updateClaimLocally(id, updates);
+        if (useN8nClaims && webhookUrl) {
+          await sendClaimToN8n(id, updates, webhookUrl);
+        } else {
+          await updateClaimLocally(id, updates);
+        }
+      } catch (err) {
+        console.error("[Deliveries] Update claim mutation failed:", err);
+        throw err;
       }
     },
     onSuccess: () => {
@@ -147,7 +183,7 @@ const Deliveries = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update delivery.",
+        description: error.message || "Failed to update delivery. Please reload the page.",
         variant: "destructive",
       });
     },

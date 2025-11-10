@@ -27,18 +27,39 @@ const Leads = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: leads, isLoading } = useQuery({
+  const { data: leads, isLoading, error: leadsError } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*, campaigns(name)")
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("leads")
+          .select("*, campaigns(name)")
+          .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+        return data;
+      } catch (err) {
+        console.error("[Leads] Query failed:", err);
+        throw err;
+      }
     },
+    retry: 1,
+    retryDelay: 1000,
   });
+
+  // Show error toast when query fails
+  if (leadsError) {
+    toast({
+      title: "Error loading leads",
+      description: leadsError instanceof Error ? leadsError.message : "Failed to fetch leads. Please reload the page.",
+      variant: "destructive",
+    });
+  }
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "new" | "routed" | "delivered" | "rejected" | "archived" | "refunded" }) => {

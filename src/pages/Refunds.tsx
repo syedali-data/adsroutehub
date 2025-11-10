@@ -60,18 +60,39 @@ const Refunds = () => {
 
   const refundWindowDays = parseInt(settings?.["REFUND_WINDOW_DAYS"] || "14", 10);
 
-  const { data: refundRequests, isLoading } = useQuery({
+  const { data: refundRequests, isLoading, error: refundsError } = useQuery({
     queryKey: ["refund-requests"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("refund_requests")
-        .select("*, deliveries(id, charge_amount, leads(id, name, email), buyers(id, business_name))")
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("refund_requests")
+          .select("*, deliveries(id, charge_amount, leads(id, name, email), buyers(id, business_name))")
+          .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+        return data;
+      } catch (err) {
+        console.error("[Refunds] Query failed:", err);
+        throw err;
+      }
     },
+    retry: 1,
+    retryDelay: 1000,
   });
+
+  // Show error toast when query fails
+  if (refundsError) {
+    toast({
+      title: "Error loading refund requests",
+      description: refundsError instanceof Error ? refundsError.message : "Failed to fetch refund requests. Please reload the page.",
+      variant: "destructive",
+    });
+  }
 
   // Fetch buyer stats for display
   const { data: buyerStats } = useQuery({
@@ -166,21 +187,33 @@ const Refunds = () => {
   }, [searchParams, deliveries, setSearchParams]);
 
   const updateRefundLocally = async (id: string, status: "approved" | "rejected") => {
-    const { error } = await supabase
-      .from("refund_requests")
-      .update({ status, handled_ts: new Date().toISOString() })
-      .eq("id", id);
+    try {
+      const { error } = await supabase
+        .from("refund_requests")
+        .update({ status, handled_ts: new Date().toISOString() })
+        .eq("id", id);
 
-    if (error) throw error;
-
-    if (status === "approved") {
-      const request = refundRequests?.find((r) => r.id === id);
-      if (request?.delivery_id) {
-        await supabase
-          .from("deliveries")
-          .update({ refunded: true, refund_ts: new Date().toISOString() })
-          .eq("id", request.delivery_id);
+      if (error) {
+        if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+          throw new Error('Session expired. Please reload the page and sign in again.');
+        }
+        throw error;
       }
+
+      if (status === "approved") {
+        const request = refundRequests?.find((r) => r.id === id);
+        if (request?.delivery_id) {
+          const { error: deliveryError } = await supabase
+            .from("deliveries")
+            .update({ refunded: true, refund_ts: new Date().toISOString() })
+            .eq("id", request.delivery_id);
+          
+          if (deliveryError) throw deliveryError;
+        }
+      }
+    } catch (err) {
+      console.error("[Refunds] Update refund locally failed:", err);
+      throw err;
     }
   };
 
@@ -218,17 +251,22 @@ const Refunds = () => {
 
   const handleRefundMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: "approved" | "rejected" }) => {
-      // Fetch settings to determine routing
-      const settingsMap = await getSettingsMap(supabase);
-      const useN8n = settingsMap["USE_N8N_REFUNDS"] === "true";
-      const webhookUrl = settingsMap["N8N_REFUND_WEBHOOK_URL"];
+      try {
+        // Fetch settings to determine routing
+        const settingsMap = await getSettingsMap(supabase);
+        const useN8n = settingsMap["USE_N8N_REFUNDS"] === "true";
+        const webhookUrl = settingsMap["N8N_REFUND_WEBHOOK_URL"];
 
-      if (useN8n && webhookUrl) {
-        // Use n8n webhook
-        await sendRefundToN8n(id, status, webhookUrl);
-      } else {
-        // Use direct Supabase updates
-        await updateRefundLocally(id, status);
+        if (useN8n && webhookUrl) {
+          // Use n8n webhook
+          await sendRefundToN8n(id, status, webhookUrl);
+        } else {
+          // Use direct Supabase updates
+          await updateRefundLocally(id, status);
+        }
+      } catch (err) {
+        console.error("[Refunds] Handle refund mutation failed:", err);
+        throw err;
       }
     },
     onSuccess: () => {
@@ -240,7 +278,7 @@ const Refunds = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to process refund",
+        description: error.message || "Failed to process refund. Please reload the page.",
         variant: "destructive",
       });
     },
@@ -264,51 +302,62 @@ const Refunds = () => {
       refundScope: string;
       refundAmount: number;
     }) => {
-      // Find the delivery to get buyer_id and lead_id
-      const delivery = deliveries?.find((d) => d.id === deliveryId);
-      if (!delivery) throw new Error("Delivery not found");
+      try {
+        // Find the delivery to get buyer_id and lead_id
+        const delivery = deliveries?.find((d) => d.id === deliveryId);
+        if (!delivery) throw new Error("Delivery not found");
 
-      // Anti-abuse rule #2: Check if already refunded
-      if (delivery.refunded) {
-        throw new Error("This delivery has already been refunded.");
+        // Anti-abuse rule #2: Check if already refunded
+        if (delivery.refunded) {
+          throw new Error("This delivery has already been refunded.");
+        }
+
+        // Anti-abuse rule #3: Check refund window
+        const deliveryAge = (Date.now() - new Date(delivery.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        if (deliveryAge > refundWindowDays) {
+          throw new Error(`Refund window has expired for this delivery (more than ${refundWindowDays} days old).`);
+        }
+
+        // Anti-abuse rule #1: Check for existing active refund request
+        const { data: existingRefund } = await supabase
+          .from("refund_requests")
+          .select("id")
+          .eq("delivery_id", deliveryId)
+          .in("status", ["pending", "approved"])
+          .maybeSingle();
+
+        if (existingRefund) {
+          throw new Error("A refund request already exists for this delivery (pending or approved).");
+        }
+
+        const { error } = await supabase.from("refund_requests").insert({
+          delivery_id: deliveryId,
+          buyer_id: delivery.buyer_id,
+          reason: reason,
+          reason_category: reasonCategory,
+          requested_by: requestedBy,
+          requested_by_details: requestedByDetails || null,
+          refund_scope: refundScope,
+          refund_amount: refundAmount,
+          status: "pending",
+          auto_decision: false,
+        });
+
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+      } catch (err) {
+        console.error("[Refunds] Create refund mutation failed:", err);
+        throw err;
       }
-
-      // Anti-abuse rule #3: Check refund window
-      const deliveryAge = (Date.now() - new Date(delivery.created_at).getTime()) / (1000 * 60 * 60 * 24);
-      if (deliveryAge > refundWindowDays) {
-        throw new Error(`Refund window has expired for this delivery (more than ${refundWindowDays} days old).`);
-      }
-
-      // Anti-abuse rule #1: Check for existing active refund request
-      const { data: existingRefund } = await supabase
-        .from("refund_requests")
-        .select("id")
-        .eq("delivery_id", deliveryId)
-        .in("status", ["pending", "approved"])
-        .maybeSingle();
-
-      if (existingRefund) {
-        throw new Error("A refund request already exists for this delivery (pending or approved).");
-      }
-
-      const { error } = await supabase.from("refund_requests").insert({
-        delivery_id: deliveryId,
-        buyer_id: delivery.buyer_id,
-        reason: reason,
-        reason_category: reasonCategory,
-        requested_by: requestedBy,
-        requested_by_details: requestedByDetails || null,
-        refund_scope: refundScope,
-        refund_amount: refundAmount,
-        status: "pending",
-        auto_decision: false,
-      });
-
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
       queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries-for-refund"] });
       toast({ title: "Success", description: "Refund request created" });
       setIsCreateModalOpen(false);
       setSelectedDeliveryId("");
@@ -323,7 +372,7 @@ const Refunds = () => {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create refund request",
+        description: error.message || "Failed to create refund request. Please reload the page.",
         variant: "destructive",
       });
     },

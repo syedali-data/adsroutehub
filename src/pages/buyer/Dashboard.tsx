@@ -26,8 +26,19 @@ export default function BuyerDashboard() {
 
   const { data: buyer, isLoading, error } = useQuery({
     queryKey: ["current-buyer"],
-    queryFn: getCurrentBuyer,
-    retry: 2,
+    queryFn: async () => {
+      try {
+        return await getCurrentBuyer();
+      } catch (err) {
+        console.error("[BuyerDashboard] getCurrentBuyer failed:", err);
+        if (err instanceof Error && (err.message?.includes('JWT') || err.message?.includes('token') || err.message?.includes('session'))) {
+          throw new Error('Session expired. Please reload the page and sign in again.');
+        }
+        throw err;
+      }
+    },
+    retry: 1,
+    retryDelay: 1000,
   });
 
   const { data: stats } = useQuery({
@@ -89,12 +100,22 @@ export default function BuyerDashboard() {
     mutationFn: async (updates: { status?: "active" | "paused"; daily_cap?: number }) => {
       if (!buyer) throw new Error("No buyer found");
       
-      const { error } = await supabase
-        .from("buyers")
-        .update(updates)
-        .eq("id", buyer.id);
+      try {
+        const { error } = await supabase
+          .from("buyers")
+          .update(updates)
+          .eq("id", buyer.id);
 
-      if (error) throw error;
+        if (error) {
+          if (error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('session')) {
+            throw new Error('Session expired. Please reload the page and sign in again.');
+          }
+          throw error;
+        }
+      } catch (err) {
+        console.error("[BuyerDashboard] Update capacity failed:", err);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["current-buyer"] });
@@ -107,7 +128,7 @@ export default function BuyerDashboard() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to update settings. Please reload the page.",
         variant: "destructive",
       });
     },
