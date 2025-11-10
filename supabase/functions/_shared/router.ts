@@ -171,7 +171,10 @@ export async function routeLeadInternal(
         source: 'internal',
         claim_status: 'new',
         claimed: false,
-        won: null,
+        won: false,
+        refunded: false,
+        contacted_at: null,
+        closed_at: null,
       }).select().single();
 
       if (deliveryError) {
