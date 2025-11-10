@@ -2,11 +2,273 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { routeLeadInternal } from "../_shared/router.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
+
+// Company information for emails
+const COMPANY_INFO = {
+  productName: 'ADS RouteHub',
+  companyName: 'Analyticals Data Services (ADS)',
+  supportEmail: 'support@analyticals.ca',
+  addressLines: [
+    'Analyticals Data Services (ADS)',
+    '1061-Eagletrace Drive',
+    'London, Ontario N6G0T3',
+    'Canada',
+  ],
+  appBaseUrl: 'https://ads-routehub.lovable.app',
+};
+
+/**
+ * Build email content for buyer lead notification
+ */
+function buildBuyerLeadEmail(
+  buyer: { business_name: string | null; email: string | null },
+  lead: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    city: string | null;
+    service_type: string | null;
+    notes?: string | null;
+    budget_raw?: string | null;
+  },
+  chargeAmount: number,
+  exclusivity: 'shared' | 'exclusive'
+): { subject: string; html: string; text: string } {
+  // Format charge amount
+  const priceFormatted = `$${chargeAmount.toFixed(2)}`;
+  
+  // Build subject line
+  const serviceText = lead.service_type || 'lead';
+  const cityText = lead.city || '';
+  const subjectPrefix = exclusivity === 'exclusive' ? 'Exclusive lead' : 'New lead';
+  const subject = cityText 
+    ? `${subjectPrefix} from ${COMPANY_INFO.productName} – ${serviceText} in ${cityText}`
+    : `${subjectPrefix} from ${COMPANY_INFO.productName}`;
+
+  // Build HTML email
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; }
+    .header p { margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; }
+    .content { padding: 30px; }
+    .intro { margin: 0 0 24px 0; font-size: 16px; line-height: 1.5; color: #333333; }
+    .intro strong { color: #667eea; }
+    .lead-card { background-color: #f8f9fa; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 24px 0; }
+    .lead-card h2 { margin: 0 0 16px 0; font-size: 20px; color: #333333; }
+    .lead-summary { display: table; width: 100%; margin-bottom: 16px; }
+    .lead-summary-row { display: table-row; }
+    .lead-summary-label { display: table-cell; padding: 6px 0; font-weight: 600; color: #666666; width: 30%; }
+    .lead-summary-value { display: table-cell; padding: 6px 0; color: #333333; }
+    .lead-type { display: inline-block; padding: 4px 12px; background-color: ${exclusivity === 'exclusive' ? '#10b981' : '#3b82f6'}; color: #ffffff; border-radius: 4px; font-size: 13px; font-weight: 600; margin-right: 8px; }
+    .price { display: inline-block; font-size: 18px; font-weight: 700; color: #667eea; }
+    .details-list { list-style: none; padding: 0; margin: 0; }
+    .details-list li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #333333; }
+    .details-list li:last-child { border-bottom: none; }
+    .details-list strong { color: #666666; font-weight: 600; min-width: 100px; display: inline-block; }
+    .cta { text-align: center; margin: 32px 0; }
+    .cta-button { display: inline-block; padding: 16px 32px; background-color: #667eea; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+    .cta-button:hover { background-color: #5568d3; }
+    .secondary-text { text-align: center; margin: 16px 0; font-size: 14px; color: #666666; line-height: 1.5; }
+    .footer { background-color: #f8f9fa; padding: 24px 30px; border-top: 1px solid #e5e7eb; }
+    .footer p { margin: 8px 0; font-size: 13px; color: #666666; line-height: 1.6; }
+    .footer a { color: #667eea; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${COMPANY_INFO.productName}</h1>
+      <p>Lead Alert</p>
+    </div>
+    
+    <div class="content">
+      <p class="intro">
+        You have a <strong>new lead</strong> from ${COMPANY_INFO.productName}. 
+        <strong>Respond within 5–10 minutes</strong> for the best chance of winning this job.
+      </p>
+      
+      <div class="lead-card">
+        <h2>${lead.name || 'New Lead'}</h2>
+        <div class="lead-summary">
+          <div class="lead-summary-row">
+            <div class="lead-summary-label">City:</div>
+            <div class="lead-summary-value">${lead.city || 'N/A'}</div>
+          </div>
+          <div class="lead-summary-row">
+            <div class="lead-summary-label">Service:</div>
+            <div class="lead-summary-value">${lead.service_type || 'N/A'}</div>
+          </div>
+          <div class="lead-summary-row">
+            <div class="lead-summary-label">Lead Type:</div>
+            <div class="lead-summary-value">
+              <span class="lead-type">${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</span>
+              <span class="price">${priceFormatted}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <ul class="details-list">
+        <li><strong>Name:</strong> ${lead.name || 'N/A'}</li>
+        <li><strong>Phone:</strong> ${lead.phone || 'N/A'} ${lead.phone ? '(call ASAP)' : ''}</li>
+        <li><strong>Email:</strong> ${lead.email || 'N/A'}</li>
+        <li><strong>City:</strong> ${lead.city || 'N/A'}</li>
+        <li><strong>Service:</strong> ${lead.service_type || 'N/A'}</li>
+        ${lead.budget_raw ? `<li><strong>Budget:</strong> ${lead.budget_raw}</li>` : ''}
+        ${lead.notes ? `<li><strong>Notes:</strong> ${lead.notes}</li>` : ''}
+      </ul>
+      
+      <div class="cta">
+        <a href="${COMPANY_INFO.appBaseUrl}/buyer" class="cta-button">View this lead in your buyer dashboard</a>
+      </div>
+      
+      <p class="secondary-text">
+        From your buyer dashboard you can adjust lead caps, pause your account, and review your recent leads.
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p>You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.</p>
+      <p>To stop receiving new lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
+      <p>${COMPANY_INFO.productName} is a product of ${COMPANY_INFO.companyName}.</p>
+      <p style="margin-top: 16px;">
+        ${COMPANY_INFO.addressLines.join('<br>')}
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  // Build plain text version
+  const text = `
+${subject}
+
+You have a new lead from ${COMPANY_INFO.productName}. Respond within 5–10 minutes for the best chance of winning this job.
+
+LEAD SUMMARY
+Name: ${lead.name || 'N/A'}
+City: ${lead.city || 'N/A'}
+Service: ${lead.service_type || 'N/A'}
+Lead Type: ${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}
+Price: ${priceFormatted}
+
+LEAD DETAILS
+Name: ${lead.name || 'N/A'}
+Phone: ${lead.phone || 'N/A'}${lead.phone ? ' (call ASAP)' : ''}
+Email: ${lead.email || 'N/A'}
+City: ${lead.city || 'N/A'}
+Service: ${lead.service_type || 'N/A'}
+${lead.budget_raw ? `Budget: ${lead.budget_raw}` : ''}
+${lead.notes ? `Notes: ${lead.notes}` : ''}
+
+VIEW IN BUYER DASHBOARD
+${COMPANY_INFO.appBaseUrl}/buyer
+
+From your buyer dashboard you can adjust lead caps, pause your account, and review your recent leads.
+
+---
+
+You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.
+
+To stop receiving new lead alerts, update your notification preferences in your buyer portal or contact us at ${COMPANY_INFO.supportEmail}.
+
+${COMPANY_INFO.productName} is a product of ${COMPANY_INFO.companyName}.
+
+${COMPANY_INFO.addressLines.join('\n')}
+  `.trim();
+
+  return { subject, html, text };
+}
+
+/**
+ * Send buyer lead notification email
+ * Does not throw errors - logs and continues if email fails
+ */
+async function sendBuyerLeadEmail(args: {
+  buyer: {
+    id: string;
+    business_name: string | null;
+    email: string | null;
+  };
+  lead: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    city: string | null;
+    service_type: string | null;
+    notes?: string | null;
+    budget_raw?: string | null;
+    source?: string | null;
+  };
+  chargeAmount: number;
+  exclusivity: 'shared' | 'exclusive';
+}): Promise<void> {
+  const { buyer, lead, chargeAmount, exclusivity } = args;
+
+  // Skip if buyer has no email
+  if (!buyer.email || buyer.email.trim() === '') {
+    console.log(`[Lead Email] Buyer ${buyer.id} has no email configured, skipping`);
+    return;
+  }
+
+  // Skip test/simulator leads
+  if (lead.source === 'routing-test' || lead.source === 'test') {
+    console.log(`[Lead Email] Skipping email for test lead ${lead.id}`);
+    return;
+  }
+
+  try {
+    console.log(`[Lead Email] Sending buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`);
+
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      console.error('[Lead Email] RESEND_API_KEY not configured, skipping email');
+      return;
+    }
+
+    const resend = new Resend(resendApiKey);
+    const { subject, html, text } = buildBuyerLeadEmail(buyer, lead, chargeAmount, exclusivity);
+
+    const emailResponse = await resend.emails.send({
+      from: `${COMPANY_INFO.productName} <onboarding@resend.dev>`, // TODO: Update to custom domain
+      to: [buyer.email],
+      subject,
+      html,
+      text,
+    });
+
+    if (emailResponse.error) {
+      console.error('[Lead Email] Resend API error:', emailResponse.error);
+    } else {
+      console.log(`[Lead Email] Email sent successfully to buyer ${buyer.id} at ${buyer.email}`);
+    }
+  } catch (error) {
+    console.error('[Lead Email] Failed to send buyer lead email', {
+      leadId: lead.id,
+      buyerId: buyer.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Do not throw - allow lead routing to continue even if email fails
+  }
+}
 
 // Zod schema for input validation
 const LeadSchema = z.object({
@@ -155,6 +417,31 @@ serve(async (req) => {
             reason: c.reason
           }))
         );
+      }
+
+      // Send email notifications to buyers
+      console.log('[Lead Intake] Sending email notifications to buyers...');
+      for (const { buyer, calculated_charge_amount } of routingResult.selected) {
+        await sendBuyerLeadEmail({
+          buyer: {
+            id: buyer.id,
+            business_name: buyer.business_name,
+            email: buyer.email,
+          },
+          lead: {
+            id: lead.id,
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+            city: lead.city,
+            service_type: lead.service_type,
+            notes: lead.notes,
+            budget_raw: lead.budget_raw,
+            source: undefined, // Real leads don't have 'routing-test' source
+          },
+          chargeAmount: calculated_charge_amount,
+          exclusivity: exclusivity || 'shared',
+        });
       }
 
       // Send SMS notifications after all deliveries are created
