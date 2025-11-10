@@ -1,10 +1,10 @@
 export const COMPANY_INFO = {
   productName: "ADS RouteHub",
   companyName: "Analyticals Data Services (ADS)",
-  supportEmail: "support@analyticals.ca",
+  supportEmail: "dataservices@analyticals.ca",
   addressLines: [
     "Analyticals Data Services (ADS)",
-    "163-1061-Eagletrace Drive", // TODO: Verify this is the correct street address
+    "1061-Eagletrace Drive",
     "London, Ontario N6G0T3",
     "Canada",
   ],

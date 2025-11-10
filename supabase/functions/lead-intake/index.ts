@@ -13,7 +13,7 @@ const corsHeaders = {
 const COMPANY_INFO = {
   productName: 'ADS RouteHub',
   companyName: 'Analyticals Data Services (ADS)',
-  supportEmail: 'support@analyticals.ca',
+  supportEmail: 'dataservices@analyticals.ca',
   addressLines: [
     'Analyticals Data Services (ADS)',
     '1061-Eagletrace Drive',
@@ -66,26 +66,37 @@ function buildBuyerLeadEmail(
     .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }
     .header h1 { margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; }
     .header p { margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; }
+    .summary-strip { background-color: #f8f9fa; border-bottom: 2px solid #e5e7eb; padding: 20px 30px; display: table; width: 100%; }
+    .summary-left { display: table-cell; vertical-align: middle; width: 60%; }
+    .summary-left-title { font-size: 18px; font-weight: 700; color: #333333; margin: 0 0 6px 0; }
+    .summary-left-meta { font-size: 14px; color: #666666; margin: 0; }
+    .summary-right { display: table-cell; vertical-align: middle; width: 40%; text-align: right; }
+    .price-pill { display: inline-block; background-color: #ffffff; border: 2px solid #667eea; border-radius: 8px; padding: 12px 16px; text-align: right; }
+    .price-pill-row { margin: 4px 0; }
+    .price-pill-label { font-size: 11px; text-transform: uppercase; color: #666666; font-weight: 600; letter-spacing: 0.5px; }
+    .price-pill-value { font-size: 16px; font-weight: 700; color: #333333; }
+    .price-pill-value.exclusive { color: #10b981; }
+    .price-pill-value.shared { color: #3b82f6; }
+    .price-pill-value.price { font-size: 20px; color: #667eea; }
     .content { padding: 30px; }
     .intro { margin: 0 0 24px 0; font-size: 16px; line-height: 1.5; color: #333333; }
     .intro strong { color: #667eea; }
-    .lead-card { background-color: #f8f9fa; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 24px 0; }
-    .lead-card h2 { margin: 0 0 16px 0; font-size: 20px; color: #333333; }
-    .lead-summary { display: table; width: 100%; margin-bottom: 16px; }
-    .lead-summary-row { display: table-row; }
-    .lead-summary-label { display: table-cell; padding: 6px 0; font-weight: 600; color: #666666; width: 30%; }
-    .lead-summary-value { display: table-cell; padding: 6px 0; color: #333333; }
-    .lead-type { display: inline-block; padding: 4px 12px; background-color: ${exclusivity === 'exclusive' ? '#10b981' : '#3b82f6'}; color: #ffffff; border-radius: 4px; font-size: 13px; font-weight: 600; margin-right: 8px; }
-    .price { display: inline-block; font-size: 18px; font-weight: 700; color: #667eea; }
+    .section-title { font-size: 16px; font-weight: 700; color: #333333; margin: 24px 0 12px 0; }
     .details-list { list-style: none; padding: 0; margin: 0; }
-    .details-list li { padding: 8px 0; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #333333; }
+    .details-list li { padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #333333; }
     .details-list li:last-child { border-bottom: none; }
-    .details-list strong { color: #666666; font-weight: 600; min-width: 100px; display: inline-block; }
+    .details-list strong { color: #666666; font-weight: 600; min-width: 120px; display: inline-block; }
+    .masked { color: #999999; font-style: italic; }
+    .locked-section { background-color: #fff9e6; border-left: 4px solid #f59e0b; padding: 16px; margin: 16px 0; border-radius: 4px; }
+    .locked-section-title { font-size: 14px; font-weight: 700; color: #92400e; margin: 0 0 8px 0; }
     .cta { text-align: center; margin: 32px 0; }
     .cta-button { display: inline-block; padding: 16px 32px; background-color: #667eea; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
     .cta-button:hover { background-color: #5568d3; }
     .secondary-text { text-align: center; margin: 16px 0; font-size: 14px; color: #666666; line-height: 1.5; }
     .footer { background-color: #f8f9fa; padding: 24px 30px; border-top: 1px solid #e5e7eb; }
+    .footer-logo-row { margin-bottom: 16px; }
+    .footer-logo-row img { height: 28px; vertical-align: middle; margin-right: 8px; }
+    .footer-logo-row span { font-size: 14px; font-weight: 500; color: #333333; vertical-align: middle; }
     .footer p { margin: 8px 0; font-size: 13px; color: #666666; line-height: 1.6; }
     .footer a { color: #667eea; text-decoration: none; }
   </style>
@@ -97,45 +108,50 @@ function buildBuyerLeadEmail(
       <p>Lead Alert</p>
     </div>
     
-    <div class="content">
-      <p class="intro">
-        You have a <strong>new lead</strong> from ${COMPANY_INFO.productName}. 
-        <strong>Respond within 5–10 minutes</strong> for the best chance of winning this job.
-      </p>
-      
-      <div class="lead-card">
-        <h2>${lead.name || 'New Lead'}</h2>
-        <div class="lead-summary">
-          <div class="lead-summary-row">
-            <div class="lead-summary-label">City:</div>
-            <div class="lead-summary-value">${lead.city || 'N/A'}</div>
+    <div class="summary-strip">
+      <div class="summary-left">
+        <p class="summary-left-title">New Lead from ${COMPANY_INFO.productName}</p>
+        <p class="summary-left-meta">Service: ${lead.service_type || 'N/A'} • City: ${lead.city || 'N/A'}</p>
+      </div>
+      <div class="summary-right">
+        <div class="price-pill">
+          <div class="price-pill-row">
+            <div class="price-pill-label">Lead Type</div>
+            <div class="price-pill-value ${exclusivity === 'exclusive' ? 'exclusive' : 'shared'}">${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</div>
           </div>
-          <div class="lead-summary-row">
-            <div class="lead-summary-label">Service:</div>
-            <div class="lead-summary-value">${lead.service_type || 'N/A'}</div>
-          </div>
-          <div class="lead-summary-row">
-            <div class="lead-summary-label">Lead Type:</div>
-            <div class="lead-summary-value">
-              <span class="lead-type">${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</span>
-              <span class="price">${priceFormatted}</span>
-            </div>
+          <div class="price-pill-row">
+            <div class="price-pill-label">Price</div>
+            <div class="price-pill-value price">${priceFormatted}</div>
           </div>
         </div>
       </div>
+    </div>
+    
+    <div class="content">
+      <p class="intro">
+        You have a <strong>New Lead</strong> from ${COMPANY_INFO.productName}. 
+        <strong>Respond within 5–10 minutes</strong> for the best chance of winning this job.
+      </p>
       
+      <h3 class="section-title">Lead Preview</h3>
       <ul class="details-list">
         <li><strong>Name:</strong> ${lead.name || 'N/A'}</li>
-        <li><strong>Phone:</strong> ${lead.phone || 'N/A'} ${lead.phone ? '(call ASAP)' : ''}</li>
-        <li><strong>Email:</strong> ${lead.email || 'N/A'}</li>
         <li><strong>City:</strong> ${lead.city || 'N/A'}</li>
         <li><strong>Service:</strong> ${lead.service_type || 'N/A'}</li>
-        ${lead.budget_raw ? `<li><strong>Budget:</strong> ${lead.budget_raw}</li>` : ''}
-        ${lead.notes ? `<li><strong>Notes:</strong> ${lead.notes}</li>` : ''}
       </ul>
       
+      <div class="locked-section">
+        <h4 class="locked-section-title">📞 Contact & Job Details (locked – open in your dashboard)</h4>
+        <ul class="details-list">
+          <li><strong>Phone:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong>Email:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong>Budget:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong>Notes:</strong> <span class="masked">Hidden – view full job details in your buyer dashboard</span></li>
+        </ul>
+      </div>
+      
       <div class="cta">
-        <a href="${COMPANY_INFO.appBaseUrl}/buyer" class="cta-button">View this lead in your buyer dashboard</a>
+        <a href="${COMPANY_INFO.appBaseUrl}/buyer/login" class="cta-button">View this lead in your buyer dashboard</a>
       </div>
       
       <p class="secondary-text">
@@ -144,9 +160,12 @@ function buildBuyerLeadEmail(
     </div>
     
     <div class="footer">
+      <div class="footer-logo-row">
+        <img src="${COMPANY_INFO.appBaseUrl}/ads-logo.png" alt="${COMPANY_INFO.companyName}" height="28">
+        <span>${COMPANY_INFO.companyName}</span>
+      </div>
       <p>You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.</p>
-      <p>To stop receiving new lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
-      <p>${COMPANY_INFO.productName} is a product of ${COMPANY_INFO.companyName}.</p>
+      <p>To stop receiving New Lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer/login">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
       <p style="margin-top: 16px;">
         ${COMPANY_INFO.addressLines.join('<br>')}
       </p>
@@ -160,26 +179,26 @@ function buildBuyerLeadEmail(
   const text = `
 ${subject}
 
-You have a new lead from ${COMPANY_INFO.productName}. Respond within 5–10 minutes for the best chance of winning this job.
+You have a New Lead from ${COMPANY_INFO.productName}. Respond within 5–10 minutes for the best chance of winning this job.
 
-LEAD SUMMARY
-Name: ${lead.name || 'N/A'}
-City: ${lead.city || 'N/A'}
-Service: ${lead.service_type || 'N/A'}
+NEW LEAD FROM ${COMPANY_INFO.productName}
+Service: ${lead.service_type || 'N/A'} • City: ${lead.city || 'N/A'}
 Lead Type: ${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}
 Price: ${priceFormatted}
 
-LEAD DETAILS
+LEAD PREVIEW
 Name: ${lead.name || 'N/A'}
-Phone: ${lead.phone || 'N/A'}${lead.phone ? ' (call ASAP)' : ''}
-Email: ${lead.email || 'N/A'}
 City: ${lead.city || 'N/A'}
 Service: ${lead.service_type || 'N/A'}
-${lead.budget_raw ? `Budget: ${lead.budget_raw}` : ''}
-${lead.notes ? `Notes: ${lead.notes}` : ''}
+
+CONTACT & JOB DETAILS (locked – open in your dashboard)
+Phone: •••••••••• (view in dashboard)
+Email: •••••••••• (view in dashboard)
+Budget: •••••••••• (view in dashboard)
+Notes: Hidden – view full job details in your buyer dashboard
 
 VIEW IN BUYER DASHBOARD
-${COMPANY_INFO.appBaseUrl}/buyer
+${COMPANY_INFO.appBaseUrl}/buyer/login
 
 From your buyer dashboard you can adjust lead caps, pause your account, and review your recent leads.
 
@@ -187,10 +206,9 @@ From your buyer dashboard you can adjust lead caps, pause your account, and revi
 
 You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.
 
-To stop receiving new lead alerts, update your notification preferences in your buyer portal or contact us at ${COMPANY_INFO.supportEmail}.
+To stop receiving New Lead alerts, update your notification preferences in your buyer portal or contact us at ${COMPANY_INFO.supportEmail}.
 
-${COMPANY_INFO.productName} is a product of ${COMPANY_INFO.companyName}.
-
+${COMPANY_INFO.companyName}
 ${COMPANY_INFO.addressLines.join('\n')}
   `.trim();
 
