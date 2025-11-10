@@ -78,6 +78,10 @@ function buildBuyerLeadEmail(
     .price-pill-value.exclusive { color: #10b981; }
     .price-pill-value.shared { color: #3b82f6; }
     .price-pill-value.price { font-size: 20px; color: #667eea; }
+    .locked-section { background-color: #F4F6FB; border: 1px solid #D1D5F0; padding: 16px; margin: 16px 0; border-radius: 8px; }
+    .locked-section-title { font-size: 14px; font-weight: 700; color: #1D4ED8; margin: 0 0 8px 0; }
+    .locked-label { color: #111827; font-weight: 600; }
+    .locked-muted { color: #6B7280; font-style: italic; }
     .content { padding: 30px; }
     .intro { margin: 0 0 24px 0; font-size: 16px; line-height: 1.5; color: #333333; }
     .intro strong { color: #667eea; }
@@ -86,12 +90,11 @@ function buildBuyerLeadEmail(
     .details-list li { padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #333333; }
     .details-list li:last-child { border-bottom: none; }
     .details-list strong { color: #666666; font-weight: 600; min-width: 120px; display: inline-block; }
-    .masked { color: #999999; font-style: italic; }
-    .locked-section { background-color: #fff9e6; border-left: 4px solid #f59e0b; padding: 16px; margin: 16px 0; border-radius: 4px; }
-    .locked-section-title { font-size: 14px; font-weight: 700; color: #92400e; margin: 0 0 8px 0; }
+    .masked { color: #6B7280; font-style: italic; }
     .cta { text-align: center; margin: 32px 0; }
-    .cta-button { display: inline-block; padding: 16px 32px; background-color: #667eea; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
-    .cta-button:hover { background-color: #5568d3; }
+    .cta-button { display: inline-block; padding: 12px 28px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 9999px; font-weight: 600; font-size: 16px; }
+    .cta-button:hover { background-color: #4338CA; }
+    .cta-note { margin-top: 8px; font-size: 12px; color: #6B7280; text-align: center; line-height: 1.5; }
     .secondary-text { text-align: center; margin: 16px 0; font-size: 14px; color: #666666; line-height: 1.5; }
     .footer { background-color: #f8f9fa; padding: 24px 30px; border-top: 1px solid #e5e7eb; }
     .footer-logo-row { margin-bottom: 16px; }
@@ -143,15 +146,18 @@ function buildBuyerLeadEmail(
       <div class="locked-section">
         <h4 class="locked-section-title">📞 Contact & Job Details (locked – open in your dashboard)</h4>
         <ul class="details-list">
-          <li><strong>Phone:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong>Email:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong>Budget:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong>Notes:</strong> <span class="masked">Hidden – view full job details in your buyer dashboard</span></li>
+          <li><strong class="locked-label">Phone:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong class="locked-label">Email:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong class="locked-label">Budget:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
+          <li><strong class="locked-label">Notes:</strong> <span class="masked">Hidden – view full job details in your buyer dashboard</span></li>
         </ul>
       </div>
       
       <div class="cta">
-        <a href="${COMPANY_INFO.appBaseUrl}/buyer/login" class="cta-button">View this lead in your buyer dashboard</a>
+        <a href="${COMPANY_INFO.appBaseUrl}/buyer/login" class="cta-button">View &amp; manage this lead in your buyer dashboard</a>
+        <p class="cta-note">
+          You'll be charged for this lead according to your ADS RouteHub pricing plan. Full contact details are available in your buyer dashboard.
+        </p>
       </div>
       
       <p class="secondary-text">
@@ -161,8 +167,8 @@ function buildBuyerLeadEmail(
     
     <div class="footer">
       <div class="footer-logo-row">
-        <img src="${COMPANY_INFO.appBaseUrl}/ads-logo.png" alt="${COMPANY_INFO.companyName}" height="28">
-        <span>${COMPANY_INFO.companyName}</span>
+        <img src="${COMPANY_INFO.appBaseUrl}/email/ads-logo.png" alt="${COMPANY_INFO.companyName}" width="32" height="32" style="display: inline-block; vertical-align: middle; margin-right: 8px; border-radius: 4px;">
+        <span style="vertical-align: middle; font-weight: 600;">${COMPANY_INFO.companyName}</span>
       </div>
       <p>You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.</p>
       <p>To stop receiving New Lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer/login">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
