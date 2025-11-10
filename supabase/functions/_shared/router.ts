@@ -40,6 +40,7 @@ export interface RoutingCandidate {
 export interface RoutingResult {
   candidates: RoutingCandidate[];
   selected: RoutingCandidate[];
+  deliveries?: Array<{ id: string; buyer_id: string }>; // Added for email unlock links
 }
 
 /**
@@ -156,6 +157,8 @@ export async function routeLeadInternal(
   }
 
   // Step 4: If not dry run, create deliveries and update buyers
+  const createdDeliveries: Array<{ id: string; buyer_id: string }> = [];
+  
   if (!dryRun && lead.id) {
     console.log(`[Router] Creating ${selected.length} deliveries for lead ${lead.id}`);
     
@@ -183,6 +186,9 @@ export async function routeLeadInternal(
       }
 
       console.log(`[Router] Created delivery ${delivery.id} for buyer ${buyer.business_name} (${buyer.id}), charge: $${calculated_charge_amount}, free: ${using_free_lead}`);
+      
+      // Track created delivery
+      createdDeliveries.push({ id: delivery.id, buyer_id: buyer.id });
 
       // Update buyer: increment daily_sent and decrement free_leads_left if used
       const { error: buyerError } = await supabase
@@ -207,5 +213,6 @@ export async function routeLeadInternal(
   return {
     candidates,
     selected,
+    deliveries: createdDeliveries.length > 0 ? createdDeliveries : undefined,
   };
 }

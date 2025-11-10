@@ -24,9 +24,9 @@ const COMPANY_INFO = {
 };
 
 /**
- * Build email content for buyer lead notification
+ * Build locked email content for buyer lead notification
  */
-function buildBuyerLeadEmail(
+function buildBuyerLeadLockedEmail(
   buyer: { business_name: string | null; email: string | null },
   lead: {
     id: string;
@@ -38,21 +38,20 @@ function buildBuyerLeadEmail(
     notes?: string | null;
     budget_raw?: string | null;
   },
+  deliveryId: string,
   chargeAmount: number,
   exclusivity: 'shared' | 'exclusive'
 ): { subject: string; html: string; text: string } {
-  // Format charge amount
   const priceFormatted = `$${chargeAmount.toFixed(2)}`;
   
-  // Build subject line
   const serviceText = lead.service_type || 'lead';
   const cityText = lead.city || '';
-  const subjectPrefix = exclusivity === 'exclusive' ? 'Exclusive lead' : 'New lead';
   const subject = cityText 
-    ? `${subjectPrefix} from ${COMPANY_INFO.productName} – ${serviceText} in ${cityText}`
-    : `${subjectPrefix} from ${COMPANY_INFO.productName}`;
+    ? `New Lead from ${COMPANY_INFO.productName} – ${serviceText} in ${cityText}`
+    : `New Lead from ${COMPANY_INFO.productName}`;
 
-  // Build HTML email
+  const unlockUrl = `${COMPANY_INFO.appBaseUrl}/buyer/deliveries/${deliveryId}?unlock=1`;
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -66,7 +65,7 @@ function buildBuyerLeadEmail(
     .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }
     .header h1 { margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; }
     .header p { margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; }
-    .summary-strip { background-color: #f8f9fa; border-bottom: 2px solid #e5e7eb; padding: 20px 30px; display: table; width: 100%; }
+    .summary-strip { background-color: #f8f9fa; border-bottom: 2px solid #e5e7eb; padding: 20px 30px; display: table; width: 100%; box-sizing: border-box; }
     .summary-left { display: table-cell; vertical-align: middle; width: 60%; }
     .summary-left-title { font-size: 18px; font-weight: 700; color: #333333; margin: 0 0 6px 0; }
     .summary-left-meta { font-size: 14px; color: #666666; margin: 0; }
@@ -78,10 +77,10 @@ function buildBuyerLeadEmail(
     .price-pill-value.exclusive { color: #10b981; }
     .price-pill-value.shared { color: #3b82f6; }
     .price-pill-value.price { font-size: 20px; color: #667eea; }
-    .locked-section { background-color: #F4F6FB; border: 1px solid #D1D5F0; padding: 16px; margin: 16px 0; border-radius: 8px; }
-    .locked-section-title { font-size: 14px; font-weight: 700; color: #1D4ED8; margin: 0 0 8px 0; }
-    .locked-label { color: #111827; font-weight: 600; }
-    .locked-muted { color: #6B7280; font-style: italic; }
+    .locked-section { background-color: #EFF6FF; border: 2px solid #BFDBFE; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    .locked-section-title { font-size: 15px; font-weight: 700; color: #1E40AF; margin: 0 0 12px 0; }
+    .locked-label { color: #374151; font-weight: 600; }
+    .locked-value { color: #6B7280; font-style: italic; }
     .content { padding: 30px; }
     .intro { margin: 0 0 24px 0; font-size: 16px; line-height: 1.5; color: #333333; }
     .intro strong { color: #667eea; }
@@ -90,16 +89,14 @@ function buildBuyerLeadEmail(
     .details-list li { padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 15px; color: #333333; }
     .details-list li:last-child { border-bottom: none; }
     .details-list strong { color: #666666; font-weight: 600; min-width: 120px; display: inline-block; }
-    .masked { color: #6B7280; font-style: italic; }
     .cta { text-align: center; margin: 32px 0; }
-    .cta-button { display: inline-block; padding: 12px 28px; background-color: #4F46E5; color: #ffffff; text-decoration: none; border-radius: 9999px; font-weight: 600; font-size: 16px; }
-    .cta-button:hover { background-color: #4338CA; }
-    .cta-note { margin-top: 8px; font-size: 12px; color: #6B7280; text-align: center; line-height: 1.5; }
-    .secondary-text { text-align: center; margin: 16px 0; font-size: 14px; color: #666666; line-height: 1.5; }
+    .cta-button { display: inline-block; padding: 14px 32px; background-color: #6366F1; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+    .cta-button:hover { background-color: #4F46E5; }
+    .cta-note { margin-top: 12px; font-size: 13px; color: #6B7280; text-align: center; line-height: 1.5; }
     .footer { background-color: #f8f9fa; padding: 24px 30px; border-top: 1px solid #e5e7eb; }
-    .footer-logo-row { margin-bottom: 16px; }
-    .footer-logo-row img { height: 28px; vertical-align: middle; margin-right: 8px; }
-    .footer-logo-row span { font-size: 14px; font-weight: 500; color: #333333; vertical-align: middle; }
+    .footer-logo-row { margin-bottom: 16px; display: flex; align-items: center; }
+    .footer-logo-row img { height: 28px; margin-right: 8px; border-radius: 4px; }
+    .footer-logo-row span { font-size: 14px; font-weight: 600; color: #333333; }
     .footer p { margin: 8px 0; font-size: 13px; color: #666666; line-height: 1.6; }
     .footer a { color: #667eea; text-decoration: none; }
   </style>
@@ -108,7 +105,7 @@ function buildBuyerLeadEmail(
   <div class="container">
     <div class="header">
       <h1>${COMPANY_INFO.productName}</h1>
-      <p>Lead Alert</p>
+      <p>New Lead Alert</p>
     </div>
     
     <div class="summary-strip">
@@ -133,7 +130,7 @@ function buildBuyerLeadEmail(
     <div class="content">
       <p class="intro">
         You have a <strong>New Lead</strong> from ${COMPANY_INFO.productName}. 
-        <strong>Respond within 5–10 minutes</strong> for the best chance of winning this job.
+        <strong>Click below to unlock and respond within 5–10 minutes</strong> for the best chance of winning this job.
       </p>
       
       <h3 class="section-title">Lead Preview</h3>
@@ -141,34 +138,32 @@ function buildBuyerLeadEmail(
         <li><strong>Name:</strong> ${lead.name || 'N/A'}</li>
         <li><strong>City:</strong> ${lead.city || 'N/A'}</li>
         <li><strong>Service:</strong> ${lead.service_type || 'N/A'}</li>
+        <li><strong>Lead Type:</strong> ${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</li>
+        <li><strong>Price:</strong> ${priceFormatted}</li>
       </ul>
       
       <div class="locked-section">
-        <h4 class="locked-section-title">📞 Contact & Job Details (locked – open in your dashboard)</h4>
+        <h4 class="locked-section-title">🔒 Contact & Job Details (Locked – unlock to view full details)</h4>
         <ul class="details-list">
-          <li><strong class="locked-label">Phone:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong class="locked-label">Email:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong class="locked-label">Budget:</strong> <span class="masked">•••••••••• (view in dashboard)</span></li>
-          <li><strong class="locked-label">Notes:</strong> <span class="masked">Hidden – view full job details in your buyer dashboard</span></li>
+          <li><strong class="locked-label">Phone:</strong> <span class="locked-value">******** (unlock to view)</span></li>
+          <li><strong class="locked-label">Email:</strong> <span class="locked-value">******** (unlock to view)</span></li>
+          <li><strong class="locked-label">Budget:</strong> <span class="locked-value">******** (unlock to view)</span></li>
+          <li><strong class="locked-label">Notes:</strong> <span class="locked-value">Hidden – unlock to view job details</span></li>
         </ul>
       </div>
       
       <div class="cta">
-        <a href="${COMPANY_INFO.appBaseUrl}/buyer/login" class="cta-button">View &amp; manage this lead in your buyer dashboard</a>
+        <a href="${unlockUrl}" class="cta-button">Pay & Unlock This Lead</a>
         <p class="cta-note">
-          You'll be charged for this lead according to your ADS RouteHub pricing plan. Full contact details are available in your buyer dashboard.
+          Click to unlock full contact details and start contacting this customer.
         </p>
       </div>
-      
-      <p class="secondary-text">
-        From your buyer dashboard you can adjust lead caps, pause your account, and review your recent leads.
-      </p>
     </div>
     
     <div class="footer">
       <div class="footer-logo-row">
-        <img src="${COMPANY_INFO.appBaseUrl}/email/ads-logo.png" alt="${COMPANY_INFO.companyName}" width="32" height="32" style="display: inline-block; vertical-align: middle; margin-right: 8px; border-radius: 4px;">
-        <span style="vertical-align: middle; font-weight: 600;">${COMPANY_INFO.companyName}</span>
+        <img src="${COMPANY_INFO.appBaseUrl}/email/ads-logo.png" alt="${COMPANY_INFO.companyName}">
+        <span>${COMPANY_INFO.companyName}</span>
       </div>
       <p>You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.</p>
       <p>To stop receiving New Lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer/login">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
@@ -181,11 +176,10 @@ function buildBuyerLeadEmail(
 </html>
   `.trim();
 
-  // Build plain text version
   const text = `
 ${subject}
 
-You have a New Lead from ${COMPANY_INFO.productName}. Respond within 5–10 minutes for the best chance of winning this job.
+You have a New Lead from ${COMPANY_INFO.productName}. Click below to unlock and respond within 5–10 minutes for the best chance of winning this job.
 
 NEW LEAD FROM ${COMPANY_INFO.productName}
 Service: ${lead.service_type || 'N/A'} • City: ${lead.city || 'N/A'}
@@ -197,16 +191,14 @@ Name: ${lead.name || 'N/A'}
 City: ${lead.city || 'N/A'}
 Service: ${lead.service_type || 'N/A'}
 
-CONTACT & JOB DETAILS (locked – open in your dashboard)
-Phone: •••••••••• (view in dashboard)
-Email: •••••••••• (view in dashboard)
-Budget: •••••••••• (view in dashboard)
-Notes: Hidden – view full job details in your buyer dashboard
+CONTACT & JOB DETAILS (Locked – unlock to view full details)
+Phone: ******** (unlock to view)
+Email: ******** (unlock to view)
+Budget: ******** (unlock to view)
+Notes: Hidden – unlock to view job details
 
-VIEW IN BUYER DASHBOARD
-${COMPANY_INFO.appBaseUrl}/buyer/login
-
-From your buyer dashboard you can adjust lead caps, pause your account, and review your recent leads.
+PAY & UNLOCK THIS LEAD
+${unlockUrl}
 
 ---
 
@@ -222,10 +214,9 @@ ${COMPANY_INFO.addressLines.join('\n')}
 }
 
 /**
- * Send buyer lead notification email
- * Does not throw errors - logs and continues if email fails
+ * Send locked buyer lead notification email
  */
-async function sendBuyerLeadEmail(args: {
+async function sendBuyerLeadLockedEmail(args: {
   buyer: {
     id: string;
     business_name: string | null;
@@ -242,25 +233,24 @@ async function sendBuyerLeadEmail(args: {
     budget_raw?: string | null;
     source?: string | null;
   };
+  deliveryId: string;
   chargeAmount: number;
   exclusivity: 'shared' | 'exclusive';
 }): Promise<void> {
-  const { buyer, lead, chargeAmount, exclusivity } = args;
+  const { buyer, lead, deliveryId, chargeAmount, exclusivity } = args;
 
-  // Skip if buyer has no email
   if (!buyer.email || buyer.email.trim() === '') {
     console.log(`[Lead Email] Buyer ${buyer.id} has no email configured, skipping`);
     return;
   }
 
-  // Skip test/simulator leads
   if (lead.source === 'routing-test' || lead.source === 'test') {
     console.log(`[Lead Email] Skipping email for test lead ${lead.id}`);
     return;
   }
 
   try {
-    console.log(`[Lead Email] Sending buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`);
+    console.log(`[Lead Email] Sending locked buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`);
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) {
@@ -269,10 +259,10 @@ async function sendBuyerLeadEmail(args: {
     }
 
     const resend = new Resend(resendApiKey);
-    const { subject, html, text } = buildBuyerLeadEmail(buyer, lead, chargeAmount, exclusivity);
+    const { subject, html, text } = buildBuyerLeadLockedEmail(buyer, lead, deliveryId, chargeAmount, exclusivity);
 
     const emailResponse = await resend.emails.send({
-      from: `${COMPANY_INFO.productName} <onboarding@resend.dev>`, // TODO: Update to custom domain
+      from: `${COMPANY_INFO.productName} <onboarding@resend.dev>`,
       to: [buyer.email],
       subject,
       html,
@@ -282,15 +272,14 @@ async function sendBuyerLeadEmail(args: {
     if (emailResponse.error) {
       console.error('[Lead Email] Resend API error:', emailResponse.error);
     } else {
-      console.log(`[Lead Email] Email sent successfully to buyer ${buyer.id} at ${buyer.email}`);
+      console.log(`[Lead Email] Locked email sent successfully to buyer ${buyer.id} at ${buyer.email}`);
     }
   } catch (error) {
-    console.error('[Lead Email] Failed to send buyer lead email', {
+    console.error('[Lead Email] Failed to send locked buyer lead email', {
       leadId: lead.id,
       buyerId: buyer.id,
       error: error instanceof Error ? error.message : String(error),
     });
-    // Do not throw - allow lead routing to continue even if email fails
   }
 }
 
@@ -443,29 +432,33 @@ serve(async (req) => {
         );
       }
 
-      // Send email notifications to buyers
-      console.log('[Lead Intake] Sending email notifications to buyers...');
+      // Send locked email notifications to buyers
+      console.log('[Lead Intake] Sending locked email notifications to buyers...');
       for (const { buyer, calculated_charge_amount } of routingResult.selected) {
-        await sendBuyerLeadEmail({
-          buyer: {
-            id: buyer.id,
-            business_name: buyer.business_name,
-            email: buyer.email,
-          },
-          lead: {
-            id: lead.id,
-            name: lead.name,
-            email: lead.email,
-            phone: lead.phone,
-            city: lead.city,
-            service_type: lead.service_type,
-            notes: lead.notes,
-            budget_raw: lead.budget_raw,
-            source: undefined, // Real leads don't have 'routing-test' source
-          },
-          chargeAmount: calculated_charge_amount,
-          exclusivity: exclusivity || 'shared',
-        });
+        const delivery = routingResult.deliveries?.find(d => d.buyer_id === buyer.id);
+        if (delivery) {
+          await sendBuyerLeadLockedEmail({
+            buyer: {
+              id: buyer.id,
+              business_name: buyer.business_name,
+              email: buyer.email,
+            },
+            lead: {
+              id: lead.id,
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
+              city: lead.city,
+              service_type: lead.service_type,
+              notes: lead.notes,
+              budget_raw: lead.budget_raw,
+              source: undefined,
+            },
+            deliveryId: delivery.id,
+            chargeAmount: calculated_charge_amount,
+            exclusivity: exclusivity || 'shared',
+          });
+        }
       }
 
       // Send SMS notifications after all deliveries are created

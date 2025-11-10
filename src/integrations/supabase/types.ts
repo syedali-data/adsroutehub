@@ -173,6 +173,8 @@ export type Database = {
           refund_ts: string | null
           refunded: boolean
           source: string
+          unlocked: boolean
+          unlocked_at: string | null
           won: boolean
         }
         Insert: {
@@ -193,6 +195,8 @@ export type Database = {
           refund_ts?: string | null
           refunded?: boolean
           source?: string
+          unlocked?: boolean
+          unlocked_at?: string | null
           won: boolean
         }
         Update: {
@@ -213,6 +217,8 @@ export type Database = {
           refund_ts?: string | null
           refunded?: boolean
           source?: string
+          unlocked?: boolean
+          unlocked_at?: string | null
           won?: boolean
         }
         Relationships: [

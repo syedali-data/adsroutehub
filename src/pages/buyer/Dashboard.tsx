@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCurrentBuyer } from "@/lib/buyerAuth";
@@ -12,17 +12,32 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, DollarSign, Package, Calendar, AlertCircle } from "lucide-react";
+import { TrendingUp, DollarSign, Package, Calendar, AlertCircle, Lock, Unlock } from "lucide-react";
+import { useUnlockDelivery } from "@/hooks/useUnlockDelivery";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function BuyerDashboard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const unlockMutation = useUnlockDelivery();
 
   // Local state for form editing
   const [statusActive, setStatusActive] = useState(true);
   const [dailyCap, setDailyCap] = useState(10);
   const [hasUnsavedCapacity, setHasUnsavedCapacity] = useState(false);
+  const [selectedDeliveryToUnlock, setSelectedDeliveryToUnlock] = useState<string | null>(null);
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
 
   const { data: buyer, isLoading, error } = useQuery({
     queryKey: ["current-buyer"],
@@ -84,8 +99,9 @@ export default function BuyerDashboard() {
           created_at,
           charge_amount,
           refunded,
+          unlocked,
           lead_id,
-          leads (name)
+          leads (name, phone, email, budget_raw, notes)
         `)
         .eq("buyer_id", buyer.id)
         .order("created_at", { ascending: false })
@@ -486,10 +502,25 @@ export default function BuyerDashboard() {
                             <Badge variant="destructive" className="px-3 py-1 text-xs font-bold">
                               Refunded
                             </Badge>
-                          ) : (
-                            <Badge className="px-3 py-1 text-xs font-bold bg-primary/90">
-                              Paid
+                          ) : delivery.unlocked ? (
+                            <Badge className="px-3 py-1 text-xs font-bold bg-green-500">
+                              <Unlock className="h-3 w-3 mr-1" />
+                              Unlocked
                             </Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1"
+                              onClick={() => {
+                                setSelectedDeliveryToUnlock(delivery.id);
+                                setShowUnlockDialog(true);
+                              }}
+                              disabled={unlockMutation.isPending}
+                            >
+                              <Lock className="h-3 w-3" />
+                              Unlock
+                            </Button>
                           )}
                         </TableCell>
                       </TableRow>
@@ -501,6 +532,31 @@ export default function BuyerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={showUnlockDialog} onOpenChange={setShowUnlockDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock this lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unlock the full contact details for this lead. The charge will be applied according to your pricing plan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedDeliveryToUnlock) {
+                  unlockMutation.mutate(selectedDeliveryToUnlock);
+                  setShowUnlockDialog(false);
+                  setSelectedDeliveryToUnlock(null);
+                }
+              }}
+            >
+              Unlock Lead
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
