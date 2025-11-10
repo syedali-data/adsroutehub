@@ -32,6 +32,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -493,140 +494,142 @@ const Refunds = () => {
       </div>
 
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Create refund request</DialogTitle>
             <DialogDescription>
               Manually create a new refund request for a delivery.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="delivery">Delivery *</Label>
-              <Select 
-                value={selectedDeliveryId} 
-                onValueChange={(value) => {
-                  setSelectedDeliveryId(value);
-                  const delivery = deliveries?.find((d) => d.id === value);
-                  if (delivery && refundScope === "full") {
-                    setRefundAmount(delivery.charge_amount?.toString() || "0");
-                  }
-                }}
-                disabled={isDeliveryReadOnly}
-              >
-                <SelectTrigger id="delivery">
-                  <SelectValue placeholder="Select a delivery" />
-                </SelectTrigger>
-                <SelectContent>
-                  {deliveries?.map((delivery) => (
-                    <SelectItem key={delivery.id} value={delivery.id}>
-                      {delivery.id.slice(0, 8)} • {delivery.leads?.name || "Unknown"} • {delivery.buyers?.business_name || "Unknown"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="reason-category">Reason category *</Label>
-              <Select value={reasonCategory} onValueChange={setReasonCategory}>
-                <SelectTrigger id="reason-category">
-                  <SelectValue placeholder="Select a reason category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bad_contact">Bad contact</SelectItem>
-                  <SelectItem value="duplicate_lead">Duplicate lead</SelectItem>
-                  <SelectItem value="outside_service_area">Outside service area</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="reason">Reason *</Label>
-              <Textarea
-                id="reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Enter the reason for the refund request"
-                rows={4}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="requested-by">Requested by *</Label>
-              <Select value={requestedBy} onValueChange={setRequestedBy}>
-                <SelectTrigger id="requested-by">
-                  <SelectValue placeholder="Select who requested the refund" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="buyer">Buyer</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="requested-by-details">Requested by details</Label>
-              <Input
-                id="requested-by-details"
-                type="text"
-                value={requestedByDetails}
-                onChange={(e) => setRequestedByDetails(e.target.value)}
-                placeholder="Name or email (optional)"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="refund-scope">Refund type *</Label>
-              <Select 
-                value={refundScope} 
-                onValueChange={(value) => {
-                  setRefundScope(value);
-                  if (value === "full") {
-                    const delivery = deliveries?.find((d) => d.id === selectedDeliveryId);
-                    if (delivery) {
+          <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="delivery">Delivery *</Label>
+                <Select 
+                  value={selectedDeliveryId} 
+                  onValueChange={(value) => {
+                    setSelectedDeliveryId(value);
+                    const delivery = deliveries?.find((d) => d.id === value);
+                    if (delivery && refundScope === "full") {
                       setRefundAmount(delivery.charge_amount?.toString() || "0");
                     }
-                  }
-                }}
+                  }}
+                  disabled={isDeliveryReadOnly}
+                >
+                  <SelectTrigger id="delivery">
+                    <SelectValue placeholder="Select a delivery" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {deliveries?.map((delivery) => (
+                      <SelectItem key={delivery.id} value={delivery.id}>
+                        {delivery.id.slice(0, 8)} • {delivery.leads?.name || "Unknown"} • {delivery.buyers?.business_name || "Unknown"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="reason-category">Reason category *</Label>
+                <Select value={reasonCategory} onValueChange={setReasonCategory}>
+                  <SelectTrigger id="reason-category">
+                    <SelectValue placeholder="Select a reason category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bad_contact">Bad contact</SelectItem>
+                    <SelectItem value="duplicate_lead">Duplicate lead</SelectItem>
+                    <SelectItem value="outside_service_area">Outside service area</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason *</Label>
+                <Textarea
+                  id="reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Enter the reason for the refund request"
+                  rows={4}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="requested-by">Requested by *</Label>
+                <Select value={requestedBy} onValueChange={setRequestedBy}>
+                  <SelectTrigger id="requested-by">
+                    <SelectValue placeholder="Select who requested the refund" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="buyer">Buyer</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="requested-by-details">Requested by details</Label>
+                <Input
+                  id="requested-by-details"
+                  type="text"
+                  value={requestedByDetails}
+                  onChange={(e) => setRequestedByDetails(e.target.value)}
+                  placeholder="Name or email (optional)"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="refund-scope">Refund type *</Label>
+                <Select 
+                  value={refundScope} 
+                  onValueChange={(value) => {
+                    setRefundScope(value);
+                    if (value === "full") {
+                      const delivery = deliveries?.find((d) => d.id === selectedDeliveryId);
+                      if (delivery) {
+                        setRefundAmount(delivery.charge_amount?.toString() || "0");
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger id="refund-scope">
+                    <SelectValue placeholder="Select refund type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Full delivery amount</SelectItem>
+                    <SelectItem value="partial">Partial amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="refund-amount">Refund amount *</Label>
+                <Input
+                  id="refund-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  disabled={refundScope === "full"}
+                  placeholder="Enter refund amount"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateRefund}
+                disabled={createRefundMutation.isPending}
               >
-                <SelectTrigger id="refund-scope">
-                  <SelectValue placeholder="Select refund type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="full">Full delivery amount</SelectItem>
-                  <SelectItem value="partial">Partial amount</SelectItem>
-                </SelectContent>
-              </Select>
+                {createRefundMutation.isPending ? "Creating..." : "Create"}
+              </Button>
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="refund-amount">Refund amount *</Label>
-              <Input
-                id="refund-amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                disabled={refundScope === "full"}
-                placeholder="Enter refund amount"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateRefund}
-              disabled={createRefundMutation.isPending}
-            >
-              {createRefundMutation.isPending ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
