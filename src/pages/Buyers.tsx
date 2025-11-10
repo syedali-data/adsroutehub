@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -19,12 +20,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2, Pencil } from "lucide-react";
+import { EditBuyerDialog } from "@/components/buyers/EditBuyerDialog";
 
 const Buyers = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [editingBuyer, setEditingBuyer] = useState<any>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: buyers, isLoading, error: queryError } = useQuery({
     queryKey: ["buyers"],
@@ -204,6 +208,14 @@ const Buyers = () => {
                       <DropdownMenuContent align="end" className="bg-background">
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
+                          setEditingBuyer(buyer);
+                          setEditDialogOpen(true);
+                        }}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
                           updateStatus.mutate({ id: buyer.id, status: "active" });
                         }}>
                           Set Active
@@ -241,6 +253,12 @@ const Buyers = () => {
           </TableBody>
         </Table>
       </div>
+
+      <EditBuyerDialog 
+        buyer={editingBuyer}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </div>
   );
 };
