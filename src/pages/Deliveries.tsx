@@ -13,13 +13,15 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Check, X, Phone, Trophy, ThumbsDown } from "lucide-react";
+import { Check, X, Phone, Trophy, ThumbsDown, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { ClaimDialog } from "@/components/deliveries/ClaimDialog";
 import { getSettingsMap } from "@/lib/settings";
 
 const Deliveries = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [claimDialog, setClaimDialog] = useState<{
     open: boolean;
     type: "won" | "lost";
@@ -293,20 +295,17 @@ const Deliveries = () => {
                           </Button>
                         </>
                       )}
-                      <Button
-                        size="sm"
-                        variant={delivery.refunded ? "destructive" : "outline"}
-                        onClick={() =>
-                          updateClaim.mutate({
-                            id: delivery.id,
-                            updates: { refunded: !delivery.refunded },
-                          })
-                        }
-                        title="Toggle Refunded"
-                        disabled={updateClaim.isPending}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                      {!delivery.refunded && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/admin/refunds?delivery_id=${delivery.id}`)}
+                          title="Create Refund Request"
+                          disabled={updateClaim.isPending}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

@@ -32,13 +32,16 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 
 const Refunds = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>("");
+  const [isDeliveryReadOnly, setIsDeliveryReadOnly] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonCategory, setReasonCategory] = useState<string>("");
   const [requestedBy, setRequestedBy] = useState<string>("buyer");
@@ -145,6 +148,22 @@ const Refunds = () => {
     },
   });
 
+  // Handle opening dialog from URL parameter
+  useEffect(() => {
+    const deliveryIdFromUrl = searchParams.get("delivery_id");
+    if (deliveryIdFromUrl && deliveries) {
+      const delivery = deliveries.find(d => d.id === deliveryIdFromUrl);
+      if (delivery) {
+        setSelectedDeliveryId(deliveryIdFromUrl);
+        setIsDeliveryReadOnly(true);
+        setRefundAmount(delivery.charge_amount?.toString() || "0");
+        setIsCreateModalOpen(true);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [searchParams, deliveries, setSearchParams]);
+
   const updateRefundLocally = async (id: string, status: "approved" | "rejected") => {
     const { error } = await supabase
       .from("refund_requests")
@@ -213,6 +232,8 @@ const Refunds = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries-for-refund"] });
       toast({ title: "Success", description: "Refund request updated" });
     },
     onError: (error: any) => {
@@ -286,9 +307,11 @@ const Refunds = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
       toast({ title: "Success", description: "Refund request created" });
       setIsCreateModalOpen(false);
       setSelectedDeliveryId("");
+      setIsDeliveryReadOnly(false);
       setReason("");
       setReasonCategory("");
       setRequestedBy("buyer");
@@ -381,7 +404,10 @@ const Refunds = () => {
           <h1 className="text-3xl font-bold">Refunds</h1>
           <p className="text-muted-foreground">Manage refund requests</p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
+        <Button onClick={() => {
+          setIsDeliveryReadOnly(false);
+          setIsCreateModalOpen(true);
+        }}>
           <Plus className="h-4 w-4 mr-2" />
           New refund request
         </Button>
@@ -486,6 +512,7 @@ const Refunds = () => {
                     setRefundAmount(delivery.charge_amount?.toString() || "0");
                   }
                 }}
+                disabled={isDeliveryReadOnly}
               >
                 <SelectTrigger id="delivery">
                   <SelectValue placeholder="Select a delivery" />

@@ -28,8 +28,8 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
         supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
         supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
         supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
-        supabase.from("deliveries").select("charge_amount, refunded").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("deliveries").select("charge_amount, refunded").gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
+        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
         supabase.from("buyers").select("*", { count: "exact", head: true }).eq("status", "active"),
       ]);
 
@@ -42,9 +42,9 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
       if (prevRevenueRes.error) throw new Error(`Previous revenue query failed: ${prevRevenueRes.error.message}`);
       if (buyersRes.error) throw new Error(`Buyers query failed: ${buyersRes.error.message}`);
 
-      const grossRevenue = revenueRes.data?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
+      const grossRevenue = revenueRes.data?.filter(d => d.won === true && !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
       const refundedAmount = revenueRes.data?.filter(d => d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
-      const prevGrossRevenue = prevRevenueRes.data?.filter(d => !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
+      const prevGrossRevenue = prevRevenueRes.data?.filter(d => d.won === true && !d.refunded).reduce((sum, d) => sum + Number(d.charge_amount || 0), 0) || 0;
 
       const calculateDelta = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? 100 : 0;
@@ -120,6 +120,7 @@ export const useRevenueOverTime = ({ startDate, endDate }: { startDate: Date; en
       const res = await supabase
         .from("deliveries")
         .select("created_at, charge_amount")
+        .eq("won", true)
         .eq("refunded", false)
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString());
@@ -148,7 +149,7 @@ export const useBuyerPerformance = ({ startDate, endDate }: { startDate: Date; e
     queryFn: async () => {
       const deliveriesRes = await supabase
         .from("deliveries")
-        .select("buyer_id, charge_amount, refunded")
+        .select("buyer_id, charge_amount, refunded, won")
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString());
 
@@ -170,7 +171,9 @@ export const useBuyerPerformance = ({ startDate, endDate }: { startDate: Date; e
           refundedDeliveries: 0,
         };
         existing.deliveries++;
-        existing.grossRevenue += Number(delivery.charge_amount || 0);
+        if (delivery.won === true && !delivery.refunded) {
+          existing.grossRevenue += Number(delivery.charge_amount || 0);
+        }
         if (delivery.refunded) {
           existing.refundedAmount += Number(delivery.charge_amount || 0);
           existing.refundedDeliveries++;
@@ -208,7 +211,7 @@ export const useCampaignPerformance = ({ startDate, endDate }: { startDate: Date
     queryFn: async () => {
       const [leadsRes, deliveriesRes] = await Promise.all([
         supabase.from("leads").select("campaign_id").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("deliveries").select("campaign_id, charge_amount, refunded").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("deliveries").select("campaign_id, charge_amount, refunded, won").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
       ]);
 
       const campaignMap = new Map<string, { leads: number; deliveries: number; revenue: number }>();
@@ -224,7 +227,7 @@ export const useCampaignPerformance = ({ startDate, endDate }: { startDate: Date
         if (!delivery.campaign_id) return;
         const existing = campaignMap.get(delivery.campaign_id) || { leads: 0, deliveries: 0, revenue: 0 };
         existing.deliveries++;
-        if (!delivery.refunded) {
+        if (delivery.won === true && !delivery.refunded) {
           existing.revenue += Number(delivery.charge_amount || 0);
         }
         campaignMap.set(delivery.campaign_id, existing);
