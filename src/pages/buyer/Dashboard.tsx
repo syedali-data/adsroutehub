@@ -11,8 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ServiceMultiSelect } from "@/components/buyers/ServiceMultiSelect";
-import { TrendingUp, DollarSign, Package, Calendar } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp, DollarSign, Package, Calendar, AlertCircle } from "lucide-react";
 
 export default function BuyerDashboard() {
   const navigate = useNavigate();
@@ -22,10 +22,7 @@ export default function BuyerDashboard() {
   // Local state for form editing
   const [statusActive, setStatusActive] = useState(true);
   const [dailyCap, setDailyCap] = useState(10);
-  const [sharedCap, setSharedCap] = useState(3);
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [hasUnsavedCapacity, setHasUnsavedCapacity] = useState(false);
-  const [hasUnsavedServices, setHasUnsavedServices] = useState(false);
 
   const { data: buyer, isLoading, error } = useQuery({
     queryKey: ["current-buyer"],
@@ -89,7 +86,7 @@ export default function BuyerDashboard() {
   });
 
   const updateCapacityMutation = useMutation({
-    mutationFn: async (updates: { status?: "active" | "paused"; daily_cap?: number; shared_cap?: number }) => {
+    mutationFn: async (updates: { status?: "active" | "paused"; daily_cap?: number }) => {
       if (!buyer) throw new Error("No buyer found");
       
       const { error } = await supabase
@@ -116,34 +113,6 @@ export default function BuyerDashboard() {
     },
   });
 
-  const updateServicesMutation = useMutation({
-    mutationFn: async (services: string[]) => {
-      if (!buyer) throw new Error("No buyer found");
-      
-      const { error } = await supabase
-        .from("buyers")
-        .update({ services_csv: services.join(",") })
-        .eq("id", buyer.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["current-buyer"] });
-      setHasUnsavedServices(false);
-      toast({
-        title: "Services updated",
-        description: "Your service preferences have been saved.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/buyer/login");
@@ -153,12 +122,7 @@ export default function BuyerDashboard() {
     updateCapacityMutation.mutate({
       status: statusActive ? "active" : "paused",
       daily_cap: dailyCap,
-      shared_cap: sharedCap,
     });
-  };
-
-  const handleSaveServices = () => {
-    updateServicesMutation.mutate(selectedServices);
   };
 
   // Sync local state with buyer data when it loads
@@ -166,10 +130,7 @@ export default function BuyerDashboard() {
     if (buyer) {
       setStatusActive(buyer.status === "active");
       setDailyCap(buyer.daily_cap);
-      setSharedCap(buyer.shared_cap);
-      setSelectedServices(buyer.services_csv?.split(",").map(s => s.trim()).filter(Boolean) || []);
       setHasUnsavedCapacity(false);
-      setHasUnsavedServices(false);
     }
   }, [buyer]);
 
@@ -209,104 +170,108 @@ export default function BuyerDashboard() {
 
   if (!buyer) return null;
 
+  const services = buyer.services_csv?.split(",").map(s => s.trim()).filter(Boolean) || [];
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-accent/10 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-8">
         {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-4xl font-bold tracking-tight">{buyer.business_name}</h1>
-            <p className="text-lg text-muted-foreground">{buyer.city} • {buyer.email}</p>
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+              {buyer.business_name}
+            </h1>
+            <p className="text-lg text-muted-foreground font-medium">{buyer.city} • {buyer.email}</p>
           </div>
-          <Button variant="outline" onClick={handleLogout} size="lg">
+          <Button variant="outline" onClick={handleLogout} size="lg" className="border-2">
             Sign out
           </Button>
         </div>
 
         {/* KPI Stats Grid */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="bg-gradient-to-br from-card to-card/50 border-2">
+          <Card className="bg-gradient-to-br from-card via-card to-muted/30 border-2 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 7 days</CardDescription>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <CardDescription className="text-xs font-semibold uppercase tracking-wider">Last 7 days</CardDescription>
+                <Calendar className="h-5 w-5 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
               {stats ? (
                 <>
-                  <CardTitle className="text-4xl font-bold">{stats.count7d}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">Leads delivered</p>
+                  <CardTitle className="text-5xl font-bold tracking-tight">{stats.count7d}</CardTitle>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Leads delivered</p>
                 </>
               ) : (
                 <>
-                  <Skeleton className="h-10 w-20 mb-1" />
+                  <Skeleton className="h-12 w-20 mb-2" />
                   <Skeleton className="h-4 w-28" />
                 </>
               )}
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-card to-card/50 border-2">
+          <Card className="bg-gradient-to-br from-card via-card to-muted/30 border-2 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 30 days</CardDescription>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <CardDescription className="text-xs font-semibold uppercase tracking-wider">Last 30 days</CardDescription>
+                <TrendingUp className="h-5 w-5 text-muted-foreground" />
               </div>
             </CardHeader>
             <CardContent>
               {stats ? (
                 <>
-                  <CardTitle className="text-4xl font-bold">{stats.count30d}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">Leads delivered</p>
+                  <CardTitle className="text-5xl font-bold tracking-tight">{stats.count30d}</CardTitle>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Leads delivered</p>
                 </>
               ) : (
                 <>
-                  <Skeleton className="h-10 w-20 mb-1" />
+                  <Skeleton className="h-12 w-20 mb-2" />
                   <Skeleton className="h-4 w-28" />
                 </>
               )}
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20">
+          <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-background border-2 border-primary/30 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 7 days</CardDescription>
-                <DollarSign className="h-4 w-4 text-primary" />
+                <CardDescription className="text-xs font-semibold uppercase tracking-wider text-primary/80">Last 7 days</CardDescription>
+                <DollarSign className="h-5 w-5 text-primary" />
               </div>
             </CardHeader>
             <CardContent>
               {stats ? (
                 <>
-                  <CardTitle className="text-4xl font-bold text-primary">${stats.spend7d.toFixed(2)}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">Total spend</p>
+                  <CardTitle className="text-5xl font-bold tracking-tight text-primary">${stats.spend7d.toFixed(2)}</CardTitle>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Total spend</p>
                 </>
               ) : (
                 <>
-                  <Skeleton className="h-10 w-24 mb-1" />
+                  <Skeleton className="h-12 w-24 mb-2" />
                   <Skeleton className="h-4 w-20" />
                 </>
               )}
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-secondary/5 to-secondary/10 border-2 border-secondary/20">
+          <Card className="bg-gradient-to-br from-secondary/10 via-secondary/5 to-background border-2 border-secondary/30 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardDescription className="text-xs font-medium uppercase tracking-wider">Last 30 days</CardDescription>
-                <Package className="h-4 w-4 text-secondary" />
+                <CardDescription className="text-xs font-semibold uppercase tracking-wider text-secondary/80">Last 30 days</CardDescription>
+                <Package className="h-5 w-5 text-secondary" />
               </div>
             </CardHeader>
             <CardContent>
               {stats ? (
                 <>
-                  <CardTitle className="text-4xl font-bold text-secondary">${stats.spend30d.toFixed(2)}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">Total spend</p>
+                  <CardTitle className="text-5xl font-bold tracking-tight text-secondary">${stats.spend30d.toFixed(2)}</CardTitle>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Total spend</p>
                 </>
               ) : (
                 <>
-                  <Skeleton className="h-10 w-24 mb-1" />
+                  <Skeleton className="h-12 w-24 mb-2" />
                   <Skeleton className="h-4 w-20" />
                 </>
               )}
@@ -315,16 +280,16 @@ export default function BuyerDashboard() {
         </div>
 
         {/* Status & Capacity */}
-        <Card className="border-2">
+        <Card className="border-2 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Status & Capacity</CardTitle>
-            <CardDescription>Control when and how many leads you receive</CardDescription>
+            <CardTitle className="text-3xl font-bold">Status & Capacity</CardTitle>
+            <CardDescription className="text-base">Control when and how many leads you receive</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4">
-              <div className="space-y-0.5">
-                <Label htmlFor="status-switch" className="text-base font-medium">Active status</Label>
-                <p className="text-sm text-muted-foreground">
+            <div className="flex items-center justify-between rounded-xl border-2 bg-gradient-to-r from-muted/50 to-muted/30 p-5 shadow-sm">
+              <div className="space-y-1">
+                <Label htmlFor="status-switch" className="text-lg font-semibold">Active status</Label>
+                <p className="text-sm text-muted-foreground font-medium">
                   {statusActive ? "You are currently receiving leads" : "Lead delivery is paused"}
                 </p>
               </div>
@@ -339,56 +304,47 @@ export default function BuyerDashboard() {
               />
             </div>
             
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="daily-cap" className="text-base">Daily cap</Label>
-                  <p className="text-sm text-muted-foreground">Maximum leads per day (0-200)</p>
-                </div>
-                <Input
-                  id="daily-cap"
-                  type="number"
-                  min="0"
-                  max="200"
-                  value={dailyCap}
-                  onChange={(e) => {
-                    const value = Math.min(200, Math.max(0, parseInt(e.target.value) || 0));
-                    setDailyCap(value);
-                    setHasUnsavedCapacity(true);
-                  }}
-                  disabled={updateCapacityMutation.isPending}
-                  className="text-lg"
-                />
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="daily-cap" className="text-lg font-semibold">Daily cap</Label>
+                <p className="text-sm text-muted-foreground">Maximum leads per day (0-200)</p>
               </div>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="shared-cap" className="text-base">Shared cap</Label>
-                  <p className="text-sm text-muted-foreground">Max shared leads per lead (0-10)</p>
-                </div>
-                <Input
-                  id="shared-cap"
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={sharedCap}
-                  onChange={(e) => {
-                    const value = Math.min(10, Math.max(0, parseInt(e.target.value) || 0));
-                    setSharedCap(value);
-                    setHasUnsavedCapacity(true);
-                  }}
-                  disabled={updateCapacityMutation.isPending}
-                  className="text-lg"
-                />
+              <Input
+                id="daily-cap"
+                type="number"
+                min="0"
+                max="200"
+                value={dailyCap}
+                onChange={(e) => {
+                  const value = Math.min(200, Math.max(0, parseInt(e.target.value) || 0));
+                  setDailyCap(value);
+                  setHasUnsavedCapacity(true);
+                }}
+                disabled={updateCapacityMutation.isPending}
+                className="text-xl font-semibold h-14 border-2"
+              />
+            </div>
+
+            <div className="rounded-xl border-2 bg-muted/30 p-5">
+              <div className="space-y-1.5">
+                <Label className="text-base font-semibold text-muted-foreground">Lead type preference</Label>
+                <p className="text-2xl font-bold capitalize">{buyer.pricing_mode}</p>
+                <p className="text-sm text-muted-foreground">
+                  {buyer.pricing_mode === 'both' && `Accepts both shared and exclusive leads (max ${buyer.shared_cap} buyers per shared lead)`}
+                  {buyer.pricing_mode === 'shared' && `Accepts shared leads only (max ${buyer.shared_cap} buyers per lead)`}
+                  {buyer.pricing_mode === 'exclusive' && 'Accepts exclusive leads only'}
+                </p>
               </div>
             </div>
 
             {hasUnsavedCapacity && (
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <p className="text-sm text-muted-foreground">You have unsaved changes</p>
+              <div className="flex items-center justify-end gap-3 pt-2 border-t-2 mt-6 pt-6">
+                <p className="text-sm text-muted-foreground font-medium">You have unsaved changes</p>
                 <Button
                   onClick={handleSaveCapacity}
                   disabled={updateCapacityMutation.isPending}
                   size="lg"
+                  className="h-12 px-8 text-base font-semibold"
                 >
                   {updateCapacityMutation.isPending ? "Saving..." : "Save changes"}
                 </Button>
@@ -398,77 +354,80 @@ export default function BuyerDashboard() {
         </Card>
 
         {/* Service Preferences */}
-        <Card className="border-2">
+        <Card className="border-2 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Service Preferences</CardTitle>
-            <CardDescription>
-              Select which services you want to receive leads for. You can choose from preset options or add custom services.
+            <CardTitle className="text-3xl font-bold">Service Preferences</CardTitle>
+            <CardDescription className="text-base">
+              Your configured service types for receiving leads
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <ServiceMultiSelect
-              value={selectedServices}
-              onChange={(services) => {
-                setSelectedServices(services);
-                setHasUnsavedServices(true);
-              }}
-              disabled={updateServicesMutation.isPending}
-            />
-
-            {hasUnsavedServices && (
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <p className="text-sm text-muted-foreground">You have unsaved changes</p>
-                <Button
-                  onClick={handleSaveServices}
-                  disabled={updateServicesMutation.isPending}
-                  size="lg"
-                >
-                  {updateServicesMutation.isPending ? "Saving..." : "Save services"}
-                </Button>
-              </div>
-            )}
+          <CardContent className="space-y-4">
+            <div className="rounded-xl border-2 bg-muted/30 p-5">
+              {services.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {services.map((service) => (
+                    <Badge 
+                      key={service} 
+                      variant="secondary" 
+                      className="px-4 py-2 text-sm font-semibold border-2"
+                    >
+                      {service}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No services configured</p>
+              )}
+            </div>
+            
+            <div className="flex items-start gap-3 rounded-xl border-2 bg-accent/20 p-4">
+              <AlertCircle className="h-5 w-5 text-accent-foreground mt-0.5 flex-shrink-0" />
+              <p className="text-sm font-medium text-accent-foreground">
+                Want to change your services? Contact support.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
         {/* Pricing (read-only) */}
-        <Card className="border-2 bg-gradient-to-br from-card to-accent/5">
+        <Card className="border-2 shadow-lg bg-gradient-to-br from-card via-card to-accent/10">
           <CardHeader>
-            <CardTitle className="text-2xl">Pricing</CardTitle>
-            <CardDescription>Your current pricing structure (managed by admin)</CardDescription>
+            <CardTitle className="text-3xl font-bold">Pricing</CardTitle>
+            <CardDescription className="text-base">Your current pricing structure (managed by admin)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Pricing mode</p>
-                <p className="text-2xl font-bold capitalize">{buyer.pricing_mode}</p>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <div className="rounded-xl border-2 bg-gradient-to-br from-card to-muted/30 p-6 space-y-2 shadow-sm">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pricing mode</p>
+                <p className="text-3xl font-bold capitalize">{buyer.pricing_mode}</p>
               </div>
-              <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Shared lead</p>
-                <p className="text-2xl font-bold">${Number(buyer.price_shared).toFixed(2)}</p>
+              <div className="rounded-xl border-2 bg-gradient-to-br from-primary/10 to-primary/5 border-primary/30 p-6 space-y-2 shadow-sm">
+                <p className="text-sm font-semibold text-primary/80 uppercase tracking-wide">Shared lead</p>
+                <p className="text-3xl font-bold text-primary">${Number(buyer.price_shared).toFixed(2)}</p>
               </div>
-              <div className="rounded-lg border bg-card p-4 space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Exclusive lead</p>
-                <p className="text-2xl font-bold">${Number(buyer.price_exclusive).toFixed(2)}</p>
+              <div className="rounded-xl border-2 bg-gradient-to-br from-secondary/10 to-secondary/5 border-secondary/30 p-6 space-y-2 shadow-sm">
+                <p className="text-sm font-semibold text-secondary/80 uppercase tracking-wide">Exclusive lead</p>
+                <p className="text-3xl font-bold text-secondary">${Number(buyer.price_exclusive).toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Recent Deliveries */}
-        <Card className="border-2">
+        <Card className="border-2 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Recent Deliveries</CardTitle>
-            <CardDescription>Your last 20 lead deliveries</CardDescription>
+            <CardTitle className="text-3xl font-bold">Recent Deliveries</CardTitle>
+            <CardDescription className="text-base">Your last 20 lead deliveries</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
+            <div className="rounded-xl border-2 overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-semibold">Date</TableHead>
-                    <TableHead className="font-semibold">Lead Name</TableHead>
-                    <TableHead className="font-semibold">Charge</TableHead>
-                    <TableHead className="font-semibold">Status</TableHead>
+                  <TableRow className="hover:bg-transparent bg-muted/50">
+                    <TableHead className="font-bold text-base">Date</TableHead>
+                    <TableHead className="font-bold text-base">Lead Name</TableHead>
+                    <TableHead className="font-bold text-base">Charge</TableHead>
+                    <TableHead className="font-bold text-base">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -476,40 +435,40 @@ export default function BuyerDashboard() {
                     // Loading state
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                       </TableRow>
                     ))
                   ) : recentDeliveries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-32 text-center">
-                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                          <Package className="h-8 w-8" />
-                          <p>No deliveries yet</p>
+                      <TableCell colSpan={4} className="h-40 text-center">
+                        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                          <Package className="h-10 w-10" />
+                          <p className="text-lg font-medium">No deliveries yet</p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
                     recentDeliveries.map((delivery: any) => (
-                      <TableRow key={delivery.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">
+                      <TableRow key={delivery.id} className="hover:bg-muted/50 transition-colors">
+                        <TableCell className="font-semibold">
                           {new Date(delivery.created_at).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>{delivery.leads?.name || "N/A"}</TableCell>
-                        <TableCell className="font-semibold">
+                        <TableCell className="font-medium">{delivery.leads?.name || "N/A"}</TableCell>
+                        <TableCell className="font-bold text-lg">
                           ${Number(delivery.charge_amount).toFixed(2)}
                         </TableCell>
                         <TableCell>
                           {delivery.refunded ? (
-                            <span className="inline-flex items-center rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                            <Badge variant="destructive" className="px-3 py-1 text-xs font-bold">
                               Refunded
-                            </span>
+                            </Badge>
                           ) : (
-                            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                            <Badge className="px-3 py-1 text-xs font-bold bg-primary/90">
                               Paid
-                            </span>
+                            </Badge>
                           )}
                         </TableCell>
                       </TableRow>
