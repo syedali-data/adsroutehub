@@ -20,7 +20,7 @@ const COMPANY_INFO = {
     'London, Ontario N6G0T3',
     'Canada',
   ],
-  appBaseUrl: 'https://ads-routehub.lovable.app',
+  appBaseUrl: 'https://adsroutehub.com',
 };
 
 /**

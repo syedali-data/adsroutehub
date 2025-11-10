@@ -8,5 +8,5 @@ export const COMPANY_INFO = {
     "London, Ontario N6G0T3",
     "Canada",
   ],
-  appBaseUrl: "https://adsroutehub.com/buyer/login", // Buyer portal base URL
+  appBaseUrl: "https://adsroutehub.com",
 };
