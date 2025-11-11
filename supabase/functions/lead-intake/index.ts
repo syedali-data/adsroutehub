@@ -261,6 +261,7 @@ async function sendBuyerLeadLockedEmail(args: {
     const resend = new Resend(resendApiKey);
     const { subject, html, text } = buildBuyerLeadLockedEmail(buyer, lead, deliveryId, chargeAmount, exclusivity);
 
+    console.log(`[Lead Email] About to send email to buyer ${buyer.id} at ${buyer.email}`);
     const emailResponse = await resend.emails.send({
       from: `${COMPANY_INFO.productName} <onboarding@resend.dev>`,
       to: [buyer.email],
@@ -433,10 +434,11 @@ serve(async (req) => {
       }
 
       // Send locked email notifications to buyers
-      console.log('[Lead Intake] Sending locked email notifications to buyers...');
+      console.log(`[Lead Intake] Sending locked email notifications to ${routingResult.selected.length} buyers...`);
       for (const { buyer, calculated_charge_amount } of routingResult.selected) {
         const delivery = routingResult.deliveries?.find(d => d.buyer_id === buyer.id);
         if (delivery) {
+          console.log(`[Lead Intake] Processing email for buyer ${buyer.id} (${buyer.email})`);
           await sendBuyerLeadLockedEmail({
             buyer: {
               id: buyer.id,
