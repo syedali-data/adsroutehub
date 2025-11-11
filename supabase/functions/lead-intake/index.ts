@@ -5,22 +5,17 @@ import { routeLeadInternal } from "../_shared/router.ts";
 import { Resend } from "https://esm.sh/resend@4.0.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
 // Company information for emails
 const COMPANY_INFO = {
-  productName: 'ADS RouteHub',
-  companyName: 'Analyticals Data Services (ADS)',
-  supportEmail: 'dataservices@analyticals.ca',
-  addressLines: [
-    'Analyticals Data Services (ADS)',
-    '1061-Eagletrace Drive',
-    'London, Ontario N6G0T3',
-    'Canada',
-  ],
-  appBaseUrl: 'https://adsroutehub.com',
+  productName: "ADS RouteHub",
+  companyName: "Analyticals Data Services (ADS)",
+  supportEmail: "dataservices@analyticals.ca",
+  addressLines: ["Analyticals Data Services (ADS)", "1061-Eagletrace Drive", "London, Ontario N6G0T3", "Canada"],
+  appBaseUrl: "https://adsroutehub.com",
 };
 
 /**
@@ -40,13 +35,13 @@ function buildBuyerLeadLockedEmail(
   },
   deliveryId: string,
   chargeAmount: number,
-  exclusivity: 'shared' | 'exclusive'
+  exclusivity: "shared" | "exclusive",
 ): { subject: string; html: string; text: string } {
   const priceFormatted = `$${chargeAmount.toFixed(2)}`;
-  
-  const serviceText = lead.service_type || 'lead';
-  const cityText = lead.city || '';
-  const subject = cityText 
+
+  const serviceText = lead.service_type || "lead";
+  const cityText = lead.city || "";
+  const subject = cityText
     ? `New Lead from ${COMPANY_INFO.productName} – ${serviceText} in ${cityText}`
     : `New Lead from ${COMPANY_INFO.productName}`;
 
@@ -111,13 +106,13 @@ function buildBuyerLeadLockedEmail(
     <div class="summary-strip">
       <div class="summary-left">
         <p class="summary-left-title">New Lead from ${COMPANY_INFO.productName}</p>
-        <p class="summary-left-meta">Service: ${lead.service_type || 'N/A'} • City: ${lead.city || 'N/A'}</p>
+        <p class="summary-left-meta">Service: ${lead.service_type || "N/A"} • City: ${lead.city || "N/A"}</p>
       </div>
       <div class="summary-right">
         <div class="price-pill">
           <div class="price-pill-row">
             <div class="price-pill-label">Lead Type</div>
-            <div class="price-pill-value ${exclusivity === 'exclusive' ? 'exclusive' : 'shared'}">${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</div>
+            <div class="price-pill-value ${exclusivity === "exclusive" ? "exclusive" : "shared"}">${exclusivity === "exclusive" ? "Exclusive" : "Shared"}</div>
           </div>
           <div class="price-pill-row">
             <div class="price-pill-label">Price</div>
@@ -135,10 +130,10 @@ function buildBuyerLeadLockedEmail(
       
       <h3 class="section-title">Lead Preview</h3>
       <ul class="details-list">
-        <li><strong>Name:</strong> ${lead.name || 'N/A'}</li>
-        <li><strong>City:</strong> ${lead.city || 'N/A'}</li>
-        <li><strong>Service:</strong> ${lead.service_type || 'N/A'}</li>
-        <li><strong>Lead Type:</strong> ${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}</li>
+        <li><strong>Name:</strong> ${lead.name || "N/A"}</li>
+        <li><strong>City:</strong> ${lead.city || "N/A"}</li>
+        <li><strong>Service:</strong> ${lead.service_type || "N/A"}</li>
+        <li><strong>Lead Type:</strong> ${exclusivity === "exclusive" ? "Exclusive" : "Shared"}</li>
         <li><strong>Price:</strong> ${priceFormatted}</li>
       </ul>
       
@@ -168,7 +163,7 @@ function buildBuyerLeadLockedEmail(
       <p>You're receiving this email because your business is configured to receive leads from ${COMPANY_INFO.productName}.</p>
       <p>To stop receiving New Lead alerts, update your notification preferences in your <a href="${COMPANY_INFO.appBaseUrl}/buyer/login">buyer portal</a> or contact us at <a href="mailto:${COMPANY_INFO.supportEmail}">${COMPANY_INFO.supportEmail}</a>.</p>
       <p style="margin-top: 16px;">
-        ${COMPANY_INFO.addressLines.join('<br>')}
+        ${COMPANY_INFO.addressLines.join("<br>")}
       </p>
     </div>
   </div>
@@ -182,14 +177,14 @@ ${subject}
 You have a New Lead from ${COMPANY_INFO.productName}. Click below to unlock and respond within 5–10 minutes for the best chance of winning this job.
 
 NEW LEAD FROM ${COMPANY_INFO.productName}
-Service: ${lead.service_type || 'N/A'} • City: ${lead.city || 'N/A'}
-Lead Type: ${exclusivity === 'exclusive' ? 'Exclusive' : 'Shared'}
+Service: ${lead.service_type || "N/A"} • City: ${lead.city || "N/A"}
+Lead Type: ${exclusivity === "exclusive" ? "Exclusive" : "Shared"}
 Price: ${priceFormatted}
 
 LEAD PREVIEW
-Name: ${lead.name || 'N/A'}
-City: ${lead.city || 'N/A'}
-Service: ${lead.service_type || 'N/A'}
+Name: ${lead.name || "N/A"}
+City: ${lead.city || "N/A"}
+Service: ${lead.service_type || "N/A"}
 
 CONTACT & JOB DETAILS (Locked – unlock to view full details)
 Phone: ******** (unlock to view)
@@ -207,7 +202,7 @@ You're receiving this email because your business is configured to receive leads
 To stop receiving New Lead alerts, update your notification preferences in your buyer portal or contact us at ${COMPANY_INFO.supportEmail}.
 
 ${COMPANY_INFO.companyName}
-${COMPANY_INFO.addressLines.join('\n')}
+${COMPANY_INFO.addressLines.join("\n")}
   `.trim();
 
   return { subject, html, text };
@@ -235,26 +230,28 @@ async function sendBuyerLeadLockedEmail(args: {
   };
   deliveryId: string;
   chargeAmount: number;
-  exclusivity: 'shared' | 'exclusive';
+  exclusivity: "shared" | "exclusive";
 }): Promise<void> {
   const { buyer, lead, deliveryId, chargeAmount, exclusivity } = args;
 
-  if (!buyer.email || buyer.email.trim() === '') {
+  if (!buyer.email || buyer.email.trim() === "") {
     console.log(`[Lead Email] Buyer ${buyer.id} has no email configured, skipping`);
     return;
   }
 
-  if (lead.source === 'routing-test' || lead.source === 'test') {
+  if (lead.source === "routing-test" || lead.source === "test") {
     console.log(`[Lead Email] Skipping email for test lead ${lead.id}`);
     return;
   }
 
   try {
-    console.log(`[Lead Email] Sending locked buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`);
+    console.log(
+      `[Lead Email] Sending locked buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`,
+    );
 
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
-      console.error('[Lead Email] RESEND_API_KEY not configured, skipping email');
+      console.error("[Lead Email] RESEND_API_KEY not configured, skipping email");
       return;
     }
 
@@ -263,7 +260,7 @@ async function sendBuyerLeadLockedEmail(args: {
 
     console.log(`[Lead Email] About to send email to buyer ${buyer.id} at ${buyer.email}`);
     const emailResponse = await resend.emails.send({
-      from: `${COMPANY_INFO.productName} <onboarding@resend.dev>`,
+      from: `${COMPANY_INFO.productName} <leads@adsroutehub.com>`,
       to: [buyer.email],
       subject,
       html,
@@ -271,12 +268,12 @@ async function sendBuyerLeadLockedEmail(args: {
     });
 
     if (emailResponse.error) {
-      console.error('[Lead Email] Resend API error:', emailResponse.error);
+      console.error("[Lead Email] Resend API error:", emailResponse.error);
     } else {
       console.log(`[Lead Email] Locked email sent successfully to buyer ${buyer.id} at ${buyer.email}`);
     }
   } catch (error) {
-    console.error('[Lead Email] Failed to send locked buyer lead email', {
+    console.error("[Lead Email] Failed to send locked buyer lead email", {
       leadId: lead.id,
       buyerId: buyer.id,
       error: error instanceof Error ? error.message : String(error),
@@ -289,84 +286,87 @@ const LeadSchema = z.object({
   campaign_slug: z.string().max(100).optional(),
   name: z.string().trim().min(1, "Name is required").max(200, "Name too long"),
   email: z.string().email("Invalid email format").max(255, "Email too long"),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone format (use E.164 format)").max(20),
+  phone: z
+    .string()
+    .regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone format (use E.164 format)")
+    .max(20),
   city: z.string().min(2, "City too short").max(100, "City too long"),
   service_type: z.string().min(2, "Service type too short").max(100, "Service type too long"),
   budget_raw: z.string().max(500, "Budget description too long").optional(),
   notes: z.string().max(2000, "Notes too long").optional(),
-  exclusivity: z.enum(['shared', 'exclusive']).optional().default('shared'),
+  exclusivity: z.enum(["shared", "exclusive"]).optional().default("shared"),
 });
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     // Validate API key
-    const apiKey = req.headers.get('x-api-key');
-    const validApiKey = Deno.env.get('LEAD_INTAKE_API_KEY');
-    
+    const apiKey = req.headers.get("x-api-key");
+    const validApiKey = Deno.env.get("LEAD_INTAKE_API_KEY");
+
     if (!apiKey || apiKey !== validApiKey) {
-      console.warn('Unauthorized lead intake attempt');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn("Unauthorized lead intake attempt");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const rawPayload = await req.json();
-    
+
     // Validate and sanitize input
     let payload;
     try {
       payload = LeadSchema.parse(rawPayload);
     } catch (validationError) {
-      console.error('Validation error:', validationError);
+      console.error("Validation error:", validationError);
       return new Response(
-        JSON.stringify({ 
-          error: 'Invalid input', 
-          details: validationError instanceof z.ZodError ? validationError.errors : 'Validation failed'
+        JSON.stringify({
+          error: "Invalid input",
+          details: validationError instanceof z.ZodError ? validationError.errors : "Validation failed",
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const { campaign_slug, name, email, phone, city, service_type, budget_raw, notes, exclusivity } = payload;
 
     // Dedupe check - date-based hash for 24h window
-    const today = new Date().toISOString().split('T')[0]; // "2025-11-07"
+    const today = new Date().toISOString().split("T")[0]; // "2025-11-07"
     const hash_24h = `${email.toLowerCase()}_${phone}_${today}`;
 
     // Check for duplicates in last 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: existingLead } = await supabase
-      .from('leads')
-      .select('id')
-      .eq('hash_24h', hash_24h)
-      .gte('created_at', twentyFourHoursAgo)
+      .from("leads")
+      .select("id")
+      .eq("hash_24h", hash_24h)
+      .gte("created_at", twentyFourHoursAgo)
       .maybeSingle();
 
     if (existingLead) {
-      return new Response(
-        JSON.stringify({ error: 'Duplicate lead detected within 24 hours' }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Duplicate lead detected within 24 hours" }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Find campaign
     const { data: campaign } = await supabase
-      .from('campaigns')
-      .select('id')
-      .eq('slug', campaign_slug || 'default')
+      .from("campaigns")
+      .select("id")
+      .eq("slug", campaign_slug || "default")
       .single();
 
     // Insert lead
     const { data: lead, error: leadError } = await supabase
-      .from('leads')
+      .from("leads")
       .insert({
         campaign_id: campaign?.id,
         name,
@@ -376,9 +376,9 @@ serve(async (req) => {
         service_type: service_type.toLowerCase(),
         budget_raw,
         notes,
-        exclusivity: exclusivity || 'shared',
+        exclusivity: exclusivity || "shared",
         hash_24h,
-        status: 'new',
+        status: "new",
       })
       .select()
       .single();
@@ -386,57 +386,64 @@ serve(async (req) => {
     if (leadError) throw leadError;
 
     // Check settings for n8n routing
-    const { data: settings } = await supabase.from('settings').select('*');
-    const settingsMap = Object.fromEntries(settings?.map(s => [s.key, s.value]) || []);
+    const { data: settings } = await supabase.from("settings").select("*");
+    const settingsMap = Object.fromEntries(settings?.map((s) => [s.key, s.value]) || []);
 
     // Use n8n routing ONLY if explicitly enabled AND webhook URL is configured
-    const useN8nRouter = settingsMap['USE_N8N_ROUTER'] === 'true';
-    const n8nWebhookUrl = settingsMap['N8N_ROUTER_WEBHOOK_URL']?.trim();
+    const useN8nRouter = settingsMap["USE_N8N_ROUTER"] === "true";
+    const n8nWebhookUrl = settingsMap["N8N_ROUTER_WEBHOOK_URL"]?.trim();
 
     if (useN8nRouter && n8nWebhookUrl) {
-      console.log('[Lead Intake] Using n8n routing');
+      console.log("[Lead Intake] Using n8n routing");
       // Call n8n webhook
       await fetch(n8nWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lead_id: lead.id, ...lead }),
       });
     } else {
       // Internal routing (default behavior)
-      console.log('[Lead Intake] Using internal routing for lead:', {
+      console.log("[Lead Intake] Using internal routing for lead:", {
         lead_id: lead.id,
         city: city.toLowerCase(),
         service_type: service_type.toLowerCase(),
-        exclusivity: exclusivity || 'shared',
+        exclusivity: exclusivity || "shared",
       });
-      
-      // Route the lead using shared routing logic
-      const routingResult = await routeLeadInternal(supabase, {
-        id: lead.id,
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone,
-        city: city.toLowerCase(),
-        service_type: service_type.toLowerCase(),
-        exclusivity: exclusivity || 'shared',
-        campaign_id: campaign?.id,
-      }, false);
 
-      console.log(`[Lead Intake] Routing complete: ${routingResult.selected.length} of ${routingResult.candidates.length} buyers selected`);
-      
+      // Route the lead using shared routing logic
+      const routingResult = await routeLeadInternal(
+        supabase,
+        {
+          id: lead.id,
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          city: city.toLowerCase(),
+          service_type: service_type.toLowerCase(),
+          exclusivity: exclusivity || "shared",
+          campaign_id: campaign?.id,
+        },
+        false,
+      );
+
+      console.log(
+        `[Lead Intake] Routing complete: ${routingResult.selected.length} of ${routingResult.candidates.length} buyers selected`,
+      );
+
       if (routingResult.selected.length === 0) {
-        console.warn('[Lead Intake] No buyers selected for lead. Candidates:', 
-          routingResult.candidates.map(c => ({
+        console.warn(
+          "[Lead Intake] No buyers selected for lead. Candidates:",
+          routingResult.candidates.map((c) => ({
             buyer: c.buyer.business_name,
-            reason: c.reason
-          }))
+            reason: c.reason,
+          })),
         );
       }
 
       // Send locked email notifications to buyers
       console.log(`[Lead Intake] Sending locked email notifications to ${routingResult.selected.length} buyers...`);
       for (const { buyer, calculated_charge_amount } of routingResult.selected) {
-        const delivery = routingResult.deliveries?.find(d => d.buyer_id === buyer.id);
+        const delivery = routingResult.deliveries?.find((d) => d.buyer_id === buyer.id);
         if (delivery) {
           console.log(`[Lead Intake] Processing email for buyer ${buyer.id} (${buyer.email})`);
           await sendBuyerLeadLockedEmail({
@@ -458,28 +465,28 @@ serve(async (req) => {
             },
             deliveryId: delivery.id,
             chargeAmount: calculated_charge_amount,
-            exclusivity: exclusivity || 'shared',
+            exclusivity: exclusivity || "shared",
           });
         }
       }
 
       // Send SMS notifications after all deliveries are created
-      const smsEnabled = settingsMap['ENABLE_SMS_DELIVERY'] === 'true';
-      const twilioSid = settingsMap['TWILIO_ACCOUNT_SID'];
-      const twilioToken = settingsMap['TWILIO_AUTH_TOKEN'];
-      const twilioFrom = settingsMap['TWILIO_FROM_NUMBER'];
+      const smsEnabled = settingsMap["ENABLE_SMS_DELIVERY"] === "true";
+      const twilioSid = settingsMap["TWILIO_ACCOUNT_SID"];
+      const twilioToken = settingsMap["TWILIO_AUTH_TOKEN"];
+      const twilioFrom = settingsMap["TWILIO_FROM_NUMBER"];
 
       if (smsEnabled && twilioSid && twilioToken && twilioFrom) {
-        console.log('[Lead Intake] SMS delivery enabled, processing notifications...');
-        
+        console.log("[Lead Intake] SMS delivery enabled, processing notifications...");
+
         for (const { buyer, calculated_charge_amount } of routingResult.selected) {
           // Check if buyer has SMS enabled and phone configured
           if (!buyer.sms_enabled) {
             console.log(`[Lead Intake] SMS disabled for buyer ${buyer.id}, skipping`);
             continue;
           }
-          
-          if (!buyer.sms_phone || buyer.sms_phone.trim() === '') {
+
+          if (!buyer.sms_phone || buyer.sms_phone.trim() === "") {
             console.log(`[Lead Intake] No SMS phone configured for buyer ${buyer.id}, skipping`);
             continue;
           }
@@ -490,8 +497,8 @@ serve(async (req) => {
           try {
             // Send SMS via Twilio REST API
             const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
-            const authHeader = 'Basic ' + btoa(`${twilioSid}:${twilioToken}`);
-            
+            const authHeader = "Basic " + btoa(`${twilioSid}:${twilioToken}`);
+
             const formBody = new URLSearchParams({
               To: buyer.sms_phone,
               From: twilioFrom,
@@ -499,10 +506,10 @@ serve(async (req) => {
             });
 
             const smsResponse = await fetch(twilioUrl, {
-              method: 'POST',
+              method: "POST",
               headers: {
-                'Authorization': authHeader,
-                'Content-Type': 'application/x-www-form-urlencoded',
+                Authorization: authHeader,
+                "Content-Type": "application/x-www-form-urlencoded",
               },
               body: formBody.toString(),
             });
@@ -519,18 +526,18 @@ serve(async (req) => {
         }
       } else {
         if (!smsEnabled) {
-          console.log('[Lead Intake] SMS delivery globally disabled');
+          console.log("[Lead Intake] SMS delivery globally disabled");
         } else {
-          console.log('[Lead Intake] Twilio credentials not fully configured, skipping SMS');
+          console.log("[Lead Intake] Twilio credentials not fully configured, skipping SMS");
         }
       }
     }
 
     // Build response with delivery details
-    let response: any = { 
-      success: true, 
+    let response: any = {
+      success: true,
       lead_id: lead.id,
-      status: 'created'
+      status: "created",
     };
 
     // If we used internal routing, include routing results
@@ -538,8 +545,9 @@ serve(async (req) => {
       // We need to access the routing result from earlier
       // Re-fetch deliveries to confirm what was created
       const { data: deliveries } = await supabase
-        .from('deliveries')
-        .select(`
+        .from("deliveries")
+        .select(
+          `
           id,
           buyer_id,
           charge_amount,
@@ -547,30 +555,34 @@ serve(async (req) => {
             business_name,
             email
           )
-        `)
-        .eq('lead_id', lead.id);
+        `,
+        )
+        .eq("lead_id", lead.id);
 
-      response.status = 'routed';
-      response.deliveries_created = deliveries?.map((d: any) => ({
-        delivery_id: d.id,
-        buyer_id: d.buyer_id,
-        business_name: Array.isArray(d.buyers) && d.buyers.length > 0 ? d.buyers[0].business_name : 'Unknown',
-        charge_amount: d.charge_amount,
-        used_free_lead: d.charge_amount === 0,
-      })) || [];
-      
-      console.log(`[Lead Intake] Response: ${response.deliveries_created.length} deliveries created for lead ${lead.id}`);
+      response.status = "routed";
+      response.deliveries_created =
+        deliveries?.map((d: any) => ({
+          delivery_id: d.id,
+          buyer_id: d.buyer_id,
+          business_name: Array.isArray(d.buyers) && d.buyers.length > 0 ? d.buyers[0].business_name : "Unknown",
+          charge_amount: d.charge_amount,
+          used_free_lead: d.charge_amount === 0,
+        })) || [];
+
+      console.log(
+        `[Lead Intake] Response: ${response.deliveries_created.length} deliveries created for lead ${lead.id}`,
+      );
     }
 
-    return new Response(
-      JSON.stringify(response),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error: any) {
-    console.error('Lead intake error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Lead intake error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
