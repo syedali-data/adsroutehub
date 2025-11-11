@@ -71,3 +71,41 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Resend Email Configuration
+
+This project uses [Resend](https://resend.com) for sending lead notification emails to buyers.
+
+### Setup Instructions
+
+1. **Create a Production API Key**
+   - Go to [Resend API Keys](https://resend.com/api-keys)
+   - Create a new API key (NOT a test key starting with `re_test_`)
+   - Copy the production key
+
+2. **Verify Your Domain**
+   - Go to [Resend Domains](https://resend.com/domains)
+   - Verify the domain `adsroutehub.com` (already configured for production)
+   - Ensure DNS records are properly set up
+
+3. **Configure the Edge Function Secret**
+   - In your Lovable project, add the secret `RESEND_API_KEY` with your production key
+   - The edge function will automatically validate that it's a production key (not `re_test_`)
+   - Redeploy the `lead-intake` function after updating secrets (secrets are loaded at cold start)
+
+4. **Email Configuration**
+   - The system uses `leads@adsroutehub.com` as the sender address
+   - This must match your verified domain
+   - All emails are sent to buyer email addresses configured in the system
+
+### Development Testing
+
+For local development, you can optionally set `ALLOW_TEST_SEND_TO_OWNER=true` to bypass the test key check. However, this is not recommended for production.
+
+### Logging
+
+The lead-intake function logs detailed information for each email:
+- `[Lead Email] sending` - Before sending (includes buyerId, leadId, recipient)
+- `[Lead Email] sent` - On success (includes Resend message ID)
+- `[Lead Email] failed` - On error (includes error details)
+- `[Lead Email] skip` - If email is skipped (missing address, test lead, etc.)

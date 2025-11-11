@@ -9,6 +9,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
+// --- Resend setup with production key validation ---
+const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
+const allowTestSendToOwner = Deno.env.get("ALLOW_TEST_SEND_TO_OWNER") === "true";
+
+if (resendApiKey.startsWith("re_test_") && !allowTestSendToOwner) {
+  throw new Error(
+    "RESEND_API_KEY is a TEST key. Use a production key to email external recipients, or set ALLOW_TEST_SEND_TO_OWNER=true for dev testing."
+  );
+}
+
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
 // Company information for emails
 const COMPANY_INFO = {
   productName: "ADS RouteHub",
@@ -234,49 +246,56 @@ async function sendBuyerLeadLockedEmail(args: {
 }): Promise<void> {
   const { buyer, lead, deliveryId, chargeAmount, exclusivity } = args;
 
-  if (!buyer.email || buyer.email.trim() === "") {
-    console.log(`[Lead Email] Buyer ${buyer.id} has no email configured, skipping`);
+  const to = (buyer.email || "").trim();
+  if (!to) {
+    console.log(`[Lead Email] skip: missing email`, { buyerId: buyer.id });
     return;
   }
 
   if (lead.source === "routing-test" || lead.source === "test") {
-    console.log(`[Lead Email] Skipping email for test lead ${lead.id}`);
+    console.log(`[Lead Email] skip: test lead`, { leadId: lead.id, buyerId: buyer.id });
+    return;
+  }
+
+  if (!resend) {
+    console.error("[Lead Email] RESEND_API_KEY not configured, skipping email");
     return;
   }
 
   try {
-    console.log(
-      `[Lead Email] Sending locked buyer lead email for lead ${lead.id} to buyer ${buyer.id} (${buyer.email})`,
-    );
-
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      console.error("[Lead Email] RESEND_API_KEY not configured, skipping email");
-      return;
-    }
-
-    const resend = new Resend(resendApiKey);
     const { subject, html, text } = buildBuyerLeadLockedEmail(buyer, lead, deliveryId, chargeAmount, exclusivity);
 
-    console.log(`[Lead Email] About to send email to buyer ${buyer.id} at ${buyer.email}`);
+    console.log("[Lead Email] sending", { leadId: lead.id, buyerId: buyer.id, to });
+
     const emailResponse = await resend.emails.send({
       from: `${COMPANY_INFO.productName} <leads@adsroutehub.com>`,
-      to: [buyer.email],
+      to: [to],
       subject,
       html,
       text,
     });
 
     if (emailResponse.error) {
-      console.error("[Lead Email] Resend API error:", emailResponse.error);
+      console.error("[Lead Email] failed", {
+        leadId: lead.id,
+        buyerId: buyer.id,
+        to,
+        name: emailResponse.error.name,
+        message: emailResponse.error.message,
+        body: emailResponse.error,
+      });
     } else {
-      console.log(`[Lead Email] Locked email sent successfully to buyer ${buyer.id} at ${buyer.email}`);
+      console.log("[Lead Email] sent", { leadId: lead.id, buyerId: buyer.id, to, id: emailResponse.data?.id });
     }
-  } catch (error) {
-    console.error("[Lead Email] Failed to send locked buyer lead email", {
+  } catch (error: any) {
+    console.error("[Lead Email] exception", {
       leadId: lead.id,
       buyerId: buyer.id,
-      error: error instanceof Error ? error.message : String(error),
+      to,
+      status: error?.status ?? error?.statusCode,
+      name: error?.name,
+      message: error?.message,
+      body: error?.response?.data ?? null,
     });
   }
 }
@@ -442,32 +461,38 @@ serve(async (req) => {
 
       // Send locked email notifications to buyers
       console.log(`[Lead Intake] Sending locked email notifications to ${routingResult.selected.length} buyers...`);
+      
+      // Use for...of to ensure proper async handling for each buyer
       for (const { buyer, calculated_charge_amount } of routingResult.selected) {
         const delivery = routingResult.deliveries?.find((d) => d.buyer_id === buyer.id);
-        if (delivery) {
-          console.log(`[Lead Intake] Processing email for buyer ${buyer.id} (${buyer.email})`);
-          await sendBuyerLeadLockedEmail({
-            buyer: {
-              id: buyer.id,
-              business_name: buyer.business_name,
-              email: buyer.email,
-            },
-            lead: {
-              id: lead.id,
-              name: lead.name,
-              email: lead.email,
-              phone: lead.phone,
-              city: lead.city,
-              service_type: lead.service_type,
-              notes: lead.notes,
-              budget_raw: lead.budget_raw,
-              source: undefined,
-            },
-            deliveryId: delivery.id,
-            chargeAmount: calculated_charge_amount,
-            exclusivity: exclusivity || "shared",
-          });
+        if (!delivery) {
+          console.warn(`[Lead Intake] No delivery found for buyer ${buyer.id}, skipping email`);
+          continue;
         }
+
+        console.log(`[Lead Intake] Processing email for buyer ${buyer.id} (${buyer.email})`);
+        
+        await sendBuyerLeadLockedEmail({
+          buyer: {
+            id: buyer.id,
+            business_name: buyer.business_name,
+            email: buyer.email,
+          },
+          lead: {
+            id: lead.id,
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+            city: lead.city,
+            service_type: lead.service_type,
+            notes: lead.notes,
+            budget_raw: lead.budget_raw,
+            source: undefined,
+          },
+          deliveryId: delivery.id,
+          chargeAmount: calculated_charge_amount,
+          exclusivity: exclusivity || "shared",
+        });
       }
 
       // Send SMS notifications after all deliveries are created
