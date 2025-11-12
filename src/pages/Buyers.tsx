@@ -34,11 +34,21 @@ const Buyers = () => {
     queryKey: ["buyers"],
     queryFn: async () => {
       console.log("[Buyers] Fetching buyers list...");
+      
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000)
+      );
+      
+      // Create query promise
+      const queryPromise = supabase
+        .from("buyers")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
       try {
-        const { data, error } = await supabase
-          .from("buyers")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // Race between timeout and query
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
         if (error) {
           console.error("[Buyers] Error fetching buyers:", error);
@@ -55,8 +65,11 @@ const Buyers = () => {
         throw err;
       }
     },
-    retry: 1,
+    retry: 2,
     retryDelay: 1000,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep unused data in cache for 5 minutes
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
   });
 
   // Show error toast when query fails
@@ -65,6 +78,10 @@ const Buyers = () => {
       title: "Error loading buyers",
       description: queryError instanceof Error ? queryError.message : "Failed to fetch buyers list. Please reload the page.",
       variant: "destructive",
+      action: {
+        label: "Retry",
+        onClick: () => queryClient.invalidateQueries({ queryKey: ["buyers"] })
+      }
     });
   }
 

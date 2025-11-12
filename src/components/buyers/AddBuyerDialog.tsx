@@ -117,12 +117,23 @@ export function AddBuyerDialog() {
       }
       console.log("[AddBuyerDialog] Buyer inserted successfully");
     },
-    onSuccess: () => {
-      console.log("[AddBuyerDialog] Mutation success, invalidating queries");
-      queryClient.invalidateQueries({ queryKey: ["buyers"] });
+    onSuccess: async () => {
+      console.log("[AddBuyerDialog] Mutation success, refetching queries");
       toast.success("Buyer added successfully!");
       setOpen(false);
       form.reset();
+      
+      // Use refetch instead of invalidate to have more control
+      try {
+        await queryClient.refetchQueries({ 
+          queryKey: ["buyers"],
+          type: 'active'
+        });
+        console.log("[AddBuyerDialog] Buyers list refreshed");
+      } catch (error) {
+        console.error("[AddBuyerDialog] Refetch failed:", error);
+        // Don't show error to user since buyer was added successfully
+      }
     },
     onError: (error: Error) => {
       console.error("[AddBuyerDialog] Mutation error:", error);
