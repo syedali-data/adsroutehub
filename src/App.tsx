@@ -21,6 +21,7 @@ import BuyerLogin from "./pages/buyer/Login";
 import BuyerDashboard from "./pages/buyer/Dashboard";
 import RoutingTest from "./pages/admin/RoutingTest";
 
+// Updated for new Supabase instance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
