@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AdminProtectedRoute } from "@/components/AdminProtectedRoute";
 import { BuyerProtectedRoute } from "@/components/BuyerProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { LoadingGuard } from "@/components/LoadingGuard";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
@@ -20,7 +21,21 @@ import BuyerLogin from "./pages/buyer/Login";
 import BuyerDashboard from "./pages/buyer/Dashboard";
 import RoutingTest from "./pages/admin/RoutingTest";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      refetchOnWindowFocus: false,
+      staleTime: 30000, // Consider data fresh for 30 seconds
+      gcTime: 5 * 60 * 1000, // Keep unused data in cache for 5 minutes
+      // Don't retry forever - stop after 2 attempts
+      onError: (error) => {
+        console.error('🔍 [QueryClient] Query error:', error);
+      }
+    }
+  }
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

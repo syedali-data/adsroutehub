@@ -12,24 +12,59 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('🔍 [BuyerProtectedRoute] Component mounted, initializing auth...');
+    let mounted = true;
+    
     const checkAuth = async () => {
+      console.log("[BuyerProtectedRoute] Starting auth check...");
+      
       try {
-        console.log("[BuyerProtectedRoute] Checking auth...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Add timeout to session check
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout after 10 seconds')), 10000)
+        );
+        
+        const { data: { session }, error: sessionError } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (!mounted) {
+          console.log("[BuyerProtectedRoute] Component unmounted during session check");
+          return;
+        }
         
         if (sessionError) {
           console.error("[BuyerProtectedRoute] Error getting session:", sessionError);
           setError("session-error");
+          setLoading(false);
           return;
         }
         
-        console.log("[BuyerProtectedRoute] Session:", session ? "exists" : "none");
+        console.log('🔍 [BuyerProtectedRoute] Session:', session?.user?.email || 'No session');
         setSession(session);
         
         if (session) {
           console.log("[BuyerProtectedRoute] Fetching buyer data...");
-          const buyerData = await getCurrentBuyer();
-          console.log("[BuyerProtectedRoute] Buyer data:", buyerData ? "found" : "not found");
+          
+          // Add timeout to buyer fetch
+          const buyerPromise = getCurrentBuyer();
+          const buyerTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Buyer fetch timeout after 8 seconds')), 8000)
+          );
+          
+          const buyerData = await Promise.race([
+            buyerPromise,
+            buyerTimeoutPromise
+          ]) as any;
+          
+          if (!mounted) {
+            console.log("[BuyerProtectedRoute] Component unmounted during buyer fetch");
+            return;
+          }
+          
+          console.log('🔍 [BuyerProtectedRoute] Buyer data:', buyerData ? 'found' : 'not found');
           setBuyer(buyerData);
           
           if (!buyerData) {
@@ -37,11 +72,15 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
           }
         }
       } catch (e) {
-        console.error("[BuyerProtectedRoute] Unexpected error in checkAuth:", e);
-        setError("unexpected");
+        console.error("[BuyerProtectedRoute] Auth check failed:", e);
+        if (mounted) {
+          setError("unexpected");
+        }
       } finally {
-        console.log("[BuyerProtectedRoute] Setting loading to false");
-        setLoading(false);
+        if (mounted) {
+          console.log('🔍 [BuyerProtectedRoute] Auth check complete, setting loading = false');
+          setLoading(false);
+        }
       }
     };
 
@@ -50,15 +89,33 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("[BuyerProtectedRoute] Auth state changed, event:", event);
+      console.log('🔍 [BuyerProtectedRoute] Auth state changed:', event, session?.user?.email || 'No session');
+      
+      if (!mounted) {
+        console.log("[BuyerProtectedRoute] Component unmounted, ignoring auth change");
+        return;
+      }
       
       try {
         setSession(session);
         
         if (session) {
           console.log("[BuyerProtectedRoute] Session exists, fetching buyer...");
-          const buyerData = await getCurrentBuyer();
-          console.log("[BuyerProtectedRoute] Buyer data from auth change:", buyerData ? "found" : "not found");
+          
+          // Add timeout to buyer fetch in auth change
+          const buyerPromise = getCurrentBuyer();
+          const buyerTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Buyer fetch timeout in auth change')), 8000)
+          );
+          
+          const buyerData = await Promise.race([
+            buyerPromise,
+            buyerTimeoutPromise
+          ]) as any;
+          
+          if (!mounted) return;
+          
+          console.log('🔍 [BuyerProtectedRoute] Buyer data from auth change:', buyerData ? 'found' : 'not found');
           setBuyer(buyerData);
           
           if (!buyerData) {
@@ -73,13 +130,17 @@ export const BuyerProtectedRoute = ({ children }: { children: React.ReactNode })
         }
       } catch (e) {
         console.error("[BuyerProtectedRoute] Error in auth state change:", e);
-        setError("unexpected");
-      } finally {
-        setLoading(false);
+        if (mounted) {
+          setError("unexpected");
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('🔍 [BuyerProtectedRoute] Cleanup, unsubscribing...');
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
 

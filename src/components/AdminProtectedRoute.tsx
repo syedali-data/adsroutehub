@@ -10,16 +10,68 @@ export const AdminProtectedRoute = ({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🔍 [AdminProtectedRoute] Component mounted, initializing auth...');
+    let mounted = true;
+    
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
+      console.log("[AdminProtectedRoute] Starting auth check...");
       
-      if (session) {
-        const adminStatus = await checkIsAdmin();
-        setIsAdmin(adminStatus);
+      try {
+        // Add timeout to session check
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout after 10 seconds')), 10000)
+        );
+        
+        const { data: { session }, error: sessionError } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (!mounted) {
+          console.log("[AdminProtectedRoute] Component unmounted during session check");
+          return;
+        }
+        
+        if (sessionError) {
+          console.error("[AdminProtectedRoute] Error getting session:", sessionError);
+          setLoading(false);
+          return;
+        }
+        
+        console.log('🔍 [AdminProtectedRoute] Session:', session?.user?.email || 'No session');
+        setSession(session);
+        
+        if (session) {
+          console.log("[AdminProtectedRoute] Checking admin status...");
+          
+          // Add timeout to admin check
+          const adminPromise = checkIsAdmin();
+          const adminTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Admin check timeout after 8 seconds')), 8000)
+          );
+          
+          const adminStatus = await Promise.race([
+            adminPromise,
+            adminTimeoutPromise
+          ]) as any;
+          
+          if (!mounted) {
+            console.log("[AdminProtectedRoute] Component unmounted during admin check");
+            return;
+          }
+          
+          console.log('🔍 [AdminProtectedRoute] Admin status:', adminStatus);
+          setIsAdmin(adminStatus);
+        }
+      } catch (e) {
+        console.error("[AdminProtectedRoute] Auth check failed:", e);
+      } finally {
+        if (mounted) {
+          console.log('🔍 [AdminProtectedRoute] Auth check complete, setting loading = false');
+          setLoading(false);
+        }
       }
-      
-      setLoading(false);
     };
 
     checkAuth();
@@ -27,17 +79,50 @@ export const AdminProtectedRoute = ({ children }: { children: React.ReactNode })
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
+      console.log('🔍 [AdminProtectedRoute] Auth state changed:', event, session?.user?.email || 'No session');
       
-      if (session) {
-        const adminStatus = await checkIsAdmin();
-        setIsAdmin(adminStatus);
-      } else {
-        setIsAdmin(false);
+      if (!mounted) {
+        console.log("[AdminProtectedRoute] Component unmounted, ignoring auth change");
+        return;
+      }
+      
+      try {
+        setSession(session);
+        
+        if (session) {
+          console.log("[AdminProtectedRoute] Checking admin status in auth change...");
+          
+          // Add timeout to admin check
+          const adminPromise = checkIsAdmin();
+          const adminTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Admin check timeout in auth change')), 8000)
+          );
+          
+          const adminStatus = await Promise.race([
+            adminPromise,
+            adminTimeoutPromise
+          ]) as any;
+          
+          if (!mounted) return;
+          
+          console.log('🔍 [AdminProtectedRoute] Admin status from auth change:', adminStatus);
+          setIsAdmin(adminStatus);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (e) {
+        console.error("[AdminProtectedRoute] Error in auth state change:", e);
+        if (mounted) {
+          setIsAdmin(false);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('🔍 [AdminProtectedRoute] Cleanup, unsubscribing...');
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {

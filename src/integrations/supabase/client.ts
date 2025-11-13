@@ -18,10 +18,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 // Add global error handler for auth issues
+console.log('🔍 [Supabase Client] Initializing global auth listener');
 supabase.auth.onAuthStateChange((event, session) => {
+  console.log('🔍 [Supabase Client] Global auth event:', event, session?.user?.email || 'No session');
+  
   if (event === 'TOKEN_REFRESHED') {
-    console.log('[Supabase] Token refreshed successfully');
+    console.log('🔍 [Supabase] Token refreshed successfully');
   } else if (event === 'SIGNED_OUT') {
-    console.log('[Supabase] User signed out');
+    console.log('🔍 [Supabase] User signed out');
+  } else if (event === 'SIGNED_IN') {
+    console.log('🔍 [Supabase] User signed in:', session?.user?.email);
   }
 });

@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function getCurrentBuyer() {
+  const startTime = performance.now();
+  console.log('🔍 [buyerAuth] getCurrentBuyer() started');
+  
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
@@ -92,10 +95,12 @@ export async function getCurrentBuyer() {
     }
     
     // Step 5: Return the buyer (mapping and role creation are best-effort)
-    console.log("[buyerAuth] Returning buyer object");
+    const duration = performance.now() - startTime;
+    console.log(`🔍 [buyerAuth] getCurrentBuyer() completed in ${duration.toFixed(0)}ms, returning buyer`);
     return buyer;
   } catch (error) {
-    console.error("[buyerAuth] Unexpected error in getCurrentBuyer:", error);
+    const duration = performance.now() - startTime;
+    console.error(`🔍 [buyerAuth] getCurrentBuyer() failed after ${duration.toFixed(0)}ms:`, error);
     return null;
   }
 }

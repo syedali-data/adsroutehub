@@ -9,11 +9,32 @@ interface DateRange {
   previousEndDate: Date;
 }
 
+// Helper function to add timeout to any promise
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+};
+
 export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previousEndDate }: DateRange) => {
   return useQuery({
     queryKey: ["dashboard-kpis", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      console.log("[Dashboard KPIs] Fetching data for range:", { startDate, endDate });
+      console.log("🔍 [Dashboard KPIs] Fetching data for range:", { startDate, endDate });
+      const startTime = performance.now();
+      
+      const queryPromise = Promise.all([
+        supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
+        supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
+        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
+        supabase.from("buyers").select("*", { count: "exact", head: true }).eq("status", "active"),
+      ]);
       
       const [
         leadsRes,
@@ -23,15 +44,11 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
         revenueRes,
         prevRevenueRes,
         buyersRes,
-      ] = await Promise.all([
-        supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
-        supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("deliveries").select("*", { count: "exact", head: true }).gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
-        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("deliveries").select("charge_amount, refunded, won").gte("created_at", previousStartDate.toISOString()).lte("created_at", previousEndDate.toISOString()),
-        supabase.from("buyers").select("*", { count: "exact", head: true }).eq("status", "active"),
-      ]);
+      ] = await withTimeout(
+        queryPromise,
+        10000,
+        "Dashboard KPI query timeout after 10 seconds"
+      );
 
       // Check for errors in any query
       if (leadsRes.error) throw new Error(`Leads query failed: ${leadsRes.error.message}`);
@@ -51,7 +68,8 @@ export const useDashboardKPIs = ({ startDate, endDate, previousStartDate, previo
         return ((current - previous) / previous) * 100;
       };
 
-      console.log("[Dashboard KPIs] Calculated metrics:", {
+      const duration = performance.now() - startTime;
+      console.log(`🔍 [Dashboard KPIs] Completed in ${duration.toFixed(0)}ms. Metrics:`, {
         totalLeads: leadsRes.count,
         deliveries: deliveriesRes.count,
         grossRevenue,
@@ -78,12 +96,16 @@ export const useLeadsDeliveriesOverTime = ({ startDate, endDate }: { startDate: 
   return useQuery({
     queryKey: ["leads-deliveries-chart", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      console.log("[Leads/Deliveries Chart] Fetching data for range:", { startDate, endDate });
+      console.log("🔍 [Leads/Deliveries Chart] Fetching data for range:", { startDate, endDate });
       
-      const [leadsRes, deliveriesRes] = await Promise.all([
-        supabase.from("leads").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("deliveries").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-      ]);
+      const [leadsRes, deliveriesRes] = await withTimeout(
+        Promise.all([
+          supabase.from("leads").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+          supabase.from("deliveries").select("created_at").gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        ]),
+        10000,
+        "Leads/Deliveries chart query timeout after 10 seconds"
+      );
 
       if (leadsRes.error) throw new Error(`Leads chart query failed: ${leadsRes.error.message}`);
       if (deliveriesRes.error) throw new Error(`Deliveries chart query failed: ${deliveriesRes.error.message}`);
@@ -115,15 +137,19 @@ export const useRevenueOverTime = ({ startDate, endDate }: { startDate: Date; en
   return useQuery({
     queryKey: ["revenue-chart", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      console.log("[Revenue Chart] Fetching data for range:", { startDate, endDate });
+      console.log("🔍 [Revenue Chart] Fetching data for range:", { startDate, endDate });
       
-      const res = await supabase
-        .from("deliveries")
-        .select("created_at, charge_amount")
-        .eq("won", true)
-        .eq("refunded", false)
-        .gte("created_at", startDate.toISOString())
-        .lte("created_at", endDate.toISOString());
+      const res = await withTimeout(
+        supabase
+          .from("deliveries")
+          .select("created_at, charge_amount")
+          .eq("won", true)
+          .eq("refunded", false)
+          .gte("created_at", startDate.toISOString())
+          .lte("created_at", endDate.toISOString()),
+        10000,
+        "Revenue chart query timeout after 10 seconds"
+      );
 
       if (res.error) throw new Error(`Revenue chart query failed: ${res.error.message}`);
 
