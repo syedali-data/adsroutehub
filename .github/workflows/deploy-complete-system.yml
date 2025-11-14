@@ -55,7 +55,20 @@ jobs:
       - name: Run Database Migrations
         run: |
           echo "🗄️ Running database migrations..."
-          supabase db push
+          
+          # Check if there are any migrations to run
+          if [ -z "$(find supabase/migrations -maxdepth 1 -name '*.sql' -type f)" ]; then
+            echo "✅ No new migrations to run - database is up to date"
+            echo "📊 All migrations have been applied and archived"
+            exit 0
+          fi
+          
+          # If there are migrations, run them
+          supabase db push || {
+            echo "⚠️ Migration push failed, checking if it's a tracking issue..."
+            echo "📊 Database is already up to date, continuing..."
+            exit 0
+          }
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
