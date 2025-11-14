@@ -169,6 +169,7 @@ const Buyers = () => {
             <TableRow>
               <TableHead>Business Name</TableHead>
               <TableHead>City</TableHead>
+              <TableHead>Services</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Daily Cap</TableHead>
               <TableHead>Daily Sent</TableHead>
@@ -181,19 +182,19 @@ const Buyers = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center">
+                <TableCell colSpan={10} className="text-center">
                   Loading...
                 </TableCell>
               </TableRow>
             ) : queryError ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-destructive">
+                <TableCell colSpan={10} className="text-center text-destructive">
                   Error loading buyers. Please check console or contact support.
                 </TableCell>
               </TableRow>
             ) : buyers?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={10} className="text-center text-muted-foreground">
                   No buyers found
                 </TableCell>
               </TableRow>
@@ -207,6 +208,15 @@ const Buyers = () => {
                     {buyer.business_name}
                   </TableCell>
                   <TableCell className="capitalize">{buyer.city}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                      {buyer.services_csv?.split(',').map((service: string, idx: number) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {service.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell>{buyer.email}</TableCell>
                   <TableCell>{buyer.daily_cap}</TableCell>
                   <TableCell>{buyer.daily_sent}</TableCell>
